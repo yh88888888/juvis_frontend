@@ -3,8 +3,14 @@ import 'package:flutter/material.dart';
 class QuickTile extends StatelessWidget {
   final IconData icon;
   final String label;
+  final VoidCallback onTap; // ✅ 추가
 
-  const QuickTile({required this.icon, required this.label, super.key});
+  const QuickTile({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onTap, // ✅ 추가
+  });
 
   static const Color tileBg = Color(0xFFFFF3F6);
   static const Color iconTint = Color(0xFFFFB6C1);
@@ -12,7 +18,7 @@ class QuickTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () {}, // TODO: 라우팅 연결
+      onTap: onTap, // ✅ 기존 onTap: () {} 제거
       borderRadius: BorderRadius.circular(16),
       child: Ink(
         decoration: BoxDecoration(

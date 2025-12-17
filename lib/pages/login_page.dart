@@ -4,6 +4,8 @@ import 'package:juvis_faciliry/components/login_components/logo.dart';
 import 'package:juvis_faciliry/size.dart';
 
 class LoginPage extends StatelessWidget {
+  const LoginPage({super.key}); // ✅ const 생성자 추가
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(

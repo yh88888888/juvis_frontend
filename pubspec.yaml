@@ -30,12 +30,34 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+
   flutter_svg: ^2.2.1
   shared_preferences: ^2.3.2
+  url_launcher: ^6.3.0
+  cupertino_icons: ^1.0.8
+  google_fonts: ^6.2.1
+  timeago: ^3.7.1 # 시간 차이를 “n분 전 / n일 전” 같은 상대 시간으로 바꿔줌.
+  intl: ^0.20.2 # 문자열을 DateTime으로 변환하거나, 날짜/숫자를 포맷팅할 때 사용.
+  flutter_slidable: ^4.0.1 # 리스트 아이템을 좌우 스와이프해서 삭제/편집 같은 버튼을 노출할 때 사용
+  image_picker: ^1.1.2 # 갤러리에 이미지에 접근
+  validators: ^3.0.0 # 지금 몰라도 됨
+  cached_network_image: ^3.4.1 # 이미 사용된 이미지를 재사용함 캐시 지원 web은 제외
+  flutter_secure_storage: ^9.0.0 # 어플리케이션 Secure Storage를 쉽게 사용할 수 있도록 도와주는 라이브러리입니다. 암호화 되어 저장된다. 해시맵
+  dio: ^5.2.0 # 서버와 통신하기 위해 필요한 라이브러리 입니다.
+  flutter_riverpod: ^2.3.6 # 상태관리 Riverpod 라이브러리 입니다.
+  logger: ^1.3.0 # 콘솔창에서 결과물을 쉽게 확인할 수 있도록 하는 Log 라이브러리입니다.
+  pull_to_refresh: ^2.0.0 # 새로고침 위젯
+  ffmpeg_kit_flutter_new: ^3.2.0
+  animated_text_kit: ^4.2.3
+  flutter_client_sse: ^2.0.3
+  flutter_local_notifications: ^19.4.2
+  permission_handler: ^12.0.1
+
+
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
-  cupertino_icons: ^1.0.8
+
 
 dev_dependencies:
   flutter_test:

@@ -1,81 +1,121 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
+import 'package:juvis_faciliry/_core/util/auth_request.dart';
+import 'package:juvis_faciliry/config/api_config.dart';
 
-const String apiBase = "http://10.0.2.2:8080";
-
-class BoardItem {
-  final int docNo;
-  final String content;
+class MaintenanceSimpleItem {
+  final int id;
+  final String? branchName;
+  final String? requesterName;
+  final String title;
   final String status;
-  final DateTime? visitDate;
+  final DateTime createdAt;
+  final DateTime? submittedAt;
 
-  BoardItem({
-    required this.docNo,
-    required this.content,
+  MaintenanceSimpleItem({
+    required this.id,
+    required this.branchName,
+    required this.requesterName,
+    required this.title,
     required this.status,
-    required this.visitDate,
+    required this.createdAt,
+    required this.submittedAt,
   });
 
-  factory BoardItem.fromJson(Map<String, dynamic> json) {
-    return BoardItem(
-      docNo: json['docNo'],
-      content: json['content'],
-      status: json['status'],
-      visitDate: json['visitDate'] != null
-          ? DateTime.parse(json['visitDate'])
-          : null,
+  factory MaintenanceSimpleItem.fromJson(Map<String, dynamic> json) {
+    return MaintenanceSimpleItem(
+      id: (json['id'] as num).toInt(),
+      branchName: json['branchName'] as String?,
+      requesterName: json['requesterName'] as String?,
+      title: json['title'] as String? ?? '',
+      status: json['status'] as String? ?? '',
+      createdAt: DateTime.parse(json['createdAt'] as String),
+      submittedAt: json['submittedAt'] == null
+          ? null
+          : DateTime.parse(json['submittedAt'] as String),
     );
   }
 }
 
-// 🟣 최신 3개 불러오기 위젯
-class LatestBoardSection extends StatefulWidget {
-  final int userId;
-
-  const LatestBoardSection({super.key, required this.userId});
+/// 🟣 최신 3개 불러오기 위젯 (지점 최신 요청 3건)
+class LatestBoardSection extends ConsumerStatefulWidget {
+  const LatestBoardSection({super.key});
 
   @override
-  State<LatestBoardSection> createState() => _LatestBoardSectionState();
+  ConsumerState<LatestBoardSection> createState() => _LatestBoardSectionState();
 }
 
-class _LatestBoardSectionState extends State<LatestBoardSection> {
+class _LatestBoardSectionState extends ConsumerState<LatestBoardSection> {
   bool _loading = true;
   String? _error;
-  List<BoardItem> _items = [];
+
+  List<MaintenanceSimpleItem> _items = [];
   final PageController _pageController = PageController();
 
   @override
   void initState() {
     super.initState();
-    _loadBoards();
+    _loadLatest();
   }
 
-  Future<void> _loadBoards() async {
+  Future<void> _loadLatest() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
     try {
-      final uri = Uri.parse(
-        "$apiBase/api/board?userId=${widget.userId}&limit=3",
-      );
-      final res = await http.get(uri);
+      // ✅ 최신 3개: page=0&size=3 (정렬은 서버 기본/서비스 강제 로직으로 createdAt DESC)
+      final uri = Uri.parse("$apiBase/api/branch/maintenances?page=0&size=3");
+
+      final res = await authRequest((token) {
+        return http.get(
+          uri,
+          headers: {
+            'Authorization': token, // token이 "Bearer ..." 형태면 그대로 OK
+            'Content-Type': 'application/json',
+          },
+        );
+      });
 
       if (res.statusCode != 200) {
-        throw Exception('서버 오류');
+        throw Exception('서버 오류: ${res.statusCode}');
       }
 
-      final List list = jsonDecode(res.body);
-      final boardList = list.map((e) => BoardItem.fromJson(e)).toList();
+      final decoded = jsonDecode(res.body) as Map<String, dynamic>;
 
+      // Resp.ok(...) => {status,msg,body:{content:[...]}}
+      final body = decoded['body'] as Map<String, dynamic>;
+      final content = (body['content'] as List)
+          .map((e) => MaintenanceSimpleItem.fromJson(e as Map<String, dynamic>))
+          .toList();
+
+      if (!mounted) return;
       setState(() {
-        _items = boardList;
+        _items = content;
         _loading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = "데이터를 불러오지 못했습니다";
         _loading = false;
       });
     }
+  }
+
+  String _fmtDateTime(DateTime? dt) {
+    if (dt == null) return '미정';
+    // 간단 포맷(yyyy-MM-dd HH:mm) - intl 없이
+    final y = dt.year.toString().padLeft(4, '0');
+    final m = dt.month.toString().padLeft(2, '0');
+    final d = dt.day.toString().padLeft(2, '0');
+    final hh = dt.hour.toString().padLeft(2, '0');
+    final mm = dt.minute.toString().padLeft(2, '0');
+    return "$y-$m-$d $hh:$mm";
   }
 
   @override
@@ -86,13 +126,8 @@ class _LatestBoardSectionState extends State<LatestBoardSection> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_error != null) {
-      return Center(child: Text(_error!));
-    }
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_error != null) return Center(child: Text(_error!));
 
     if (_items.isEmpty) {
       return const Center(
@@ -101,6 +136,8 @@ class _LatestBoardSectionState extends State<LatestBoardSection> {
     }
 
     return Column(
+      mainAxisSize: MainAxisSize.min, // ✅ 핵심
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
           height: 160,
@@ -109,26 +146,62 @@ class _LatestBoardSectionState extends State<LatestBoardSection> {
             itemCount: _items.length,
             itemBuilder: (context, index) {
               final item = _items[index];
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 8),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        "문서번호: ${item.docNo}",
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
+
+              return InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () {
+                  Navigator.pushNamed(
+                    context,
+                    '/maintenance-detail',
+                    arguments: {'id': item.id},
+                  );
+                },
+                child: Card(
+                  margin: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFE9EE),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Text(
+                                '접수내용',
+                                style: TextStyle(fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              " ${item.title}",
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text("접수내용: ${item.content}"),
-                      Text("상태: ${item.status}"),
-                      Text("방문예정일: ${item.visitDate ?? '미정'}"),
-                    ],
+                        const SizedBox(height: 12),
+                        _KvRow(title: "상태:", value: "${item.status}"),
+                        _KvRow(
+                          title: "제출일:",
+                          value: "${_fmtDateTime(item.submittedAt)}",
+                        ),
+                        // _KvRow(
+                        //   title: "방문예정일:",
+                        //   value: "${_fmtDateTime(item.workStartDate)}",
+                        // ),
+                      ],
+                    ),
                   ),
                 ),
               );
@@ -157,7 +230,6 @@ class _LatestBoardSectionState extends State<LatestBoardSection> {
                       _pageController.page != null) {
                     current = _pageController.page!.round();
                   }
-
                   final isActive = current == index;
 
                   return Container(
@@ -173,6 +245,40 @@ class _LatestBoardSectionState extends State<LatestBoardSection> {
               ),
             );
           }),
+        ),
+      ],
+    );
+  }
+}
+
+class _KvRow extends StatelessWidget {
+  final String title;
+  final String value;
+
+  const _KvRow({required this.title, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 78,
+          child: Text(
+            title,
+            style: const TextStyle(
+              color: Colors.black54,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(
+              color: Colors.black87,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
       ],
     );

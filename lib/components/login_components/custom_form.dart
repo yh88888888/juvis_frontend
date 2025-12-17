@@ -1,55 +1,67 @@
-import 'dart:convert';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:flutter_riverpod/flutter_riverpod.dart'; // ✅ 추가
+import 'package:juvis_faciliry/_core/session/session_provider.dart';
+import 'package:juvis_faciliry/_core/session/session_user.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../size.dart';
 import 'custom_text_filed.dart';
 
-class CustomForm extends StatefulWidget {
+class CustomForm extends ConsumerStatefulWidget {
   const CustomForm({super.key});
 
   @override
-  State<CustomForm> createState() => _CustomFormState();
+  ConsumerState<CustomForm> createState() => _CustomFormState();
 }
 
-class _CustomFormState extends State<CustomForm> {
+class _CustomFormState extends ConsumerState<CustomForm> {
   final _formKey = GlobalKey<FormState>();
   final idController = TextEditingController(); // username
   final pwController = TextEditingController(); // password
 
   bool _showErrors = false; // 에러 표시 여부 상태
   bool _saveId = false; // 아이디 저장
-  bool _autoLogin = false; // 자동 로그인
   bool _isLoading = false; // 로그인 중 로딩 표시용
   String? _loginError; // 아이디/비밀번호 불일치 메시지
 
   @override
   void initState() {
     super.initState();
-    _loadSavedLoginInfo();
+    _loadSavedId(); // ✅ 로그인 화면은 "표시용"만
   }
 
-  Future<void> _loadSavedLoginInfo() async {
+  /// ✅ 로그인 화면에서 할 일:
+  /// - 아이디 저장(save_id)이면 idController 채우기
+  /// - 체크박스 상태만 복원
+  /// ❌ 여기서 세션 자동복구(자동로그인 실행)는 하지 않음
+
+  Future<void> _loadSavedId() async {
     final prefs = await SharedPreferences.getInstance();
 
     final savedId = prefs.getString('saved_id') ?? '';
     final saveId = prefs.getBool('save_id') ?? false;
-    final autoLogin = prefs.getBool('auto_login') ?? false;
 
+    if (!mounted) return;
     setState(() {
       _saveId = saveId;
-      _autoLogin = autoLogin;
       if (saveId && savedId.isNotEmpty) {
         idController.text = savedId;
       }
     });
+  }
 
-    // ⚠️ 실제 자동 로그인은 토큰 기반으로 구현하는 게 안전함
-    // if (autoLogin) {
-    //   await _submitLogin(); // 나중에 토큰 기반 자동 로그인으로 변경
-    // }
+  /// ✅ 로그인 성공 후 "설정값" 저장은 여기서만
+  Future<void> _persistLoginPrefs(String username) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.setBool('save_id', _saveId);
+
+    if (_saveId) {
+      await prefs.setString('saved_id', username);
+    } else {
+      await prefs.remove('saved_id');
+    }
   }
 
   @override
@@ -59,7 +71,7 @@ class _CustomFormState extends State<CustomForm> {
     super.dispose();
   }
 
-  // 🔹 로그인 요청 + 응답 처리 + 화면 이동
+  // 🔹 로그인 요청 + 세션 업데이트 + 화면 이동
   Future<void> _submitLogin() async {
     final username = idController.text.trim();
     final password = pwController.text;
@@ -77,85 +89,65 @@ class _CustomFormState extends State<CustomForm> {
       return;
     }
 
-    const String apiBase = "http://10.0.2.2:8080"; // Android 에뮬레이터 기준
-    final uri = Uri.parse("$apiBase/api/auth/login");
-
     setState(() => _isLoading = true);
 
     try {
-      final res = await http.post(
-        uri,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"username": username, "password": password}),
-      );
+      // ✅ 로그인은 SessionNotifier가 담당 (토큰/세션 저장도 notifier 쪽에서)
+      final SessionUser user = await ref
+          .read(sessionProvider.notifier)
+          .login(username: username, password: password);
 
-      // 2) HTTP 상태 코드 체크
-      if (res.statusCode == 200 || res.statusCode == 201) {
-        final decoded = jsonDecode(res.body);
+      // ✅ UI 설정(아이디저장/자동로그인)은 여기서만 저장
+      await _persistLoginPrefs(username);
 
-        // 3) 서버에서 내려준 status == 200 인지 체크
-        if (decoded["status"] == 200) {
-          final body = decoded["body"];
-          final userId = body["id"];
-          final resUsername = body["username"];
-          final roles = body["roles"];
-          final name = body["name"];
+      // ✅ (선택) 자동로그인 체크를 껐다면, 혹시 남아있는 토큰으로
+      // 다음 앱 시작 때 자동복구되는 걸 원천 차단하고 싶으면
+      // SessionNotifier에 clearStorage() 같은 함수를 만들어서 호출
+      //
+      // if (!_autoLogin) {
+      //   await ref.read(sessionProvider.notifier).clearStorage(); // <- 토큰 제거
+      // }
 
-          print(
-            "로그인/가입 성공 userId=$userId, username=$resUsername, roles=$roles",
-          );
+      if (!mounted) return;
 
-          // ✅ 로그인 성공 시, 아이디/설정 저장
-          final prefs = await SharedPreferences.getInstance();
+      // role / id / name 은 이제 세션에서 가져올 수 있음
+      final userId = user.id;
+      final name = user.name;
+      final role = user.role;
 
-          // "아이디 저장" 체크되어 있으면 아이디 저장, 아니면 삭제
-          if (_saveId) {
-            await prefs.setString('saved_id', username);
-            await prefs.setBool('save_id', true);
-          } else {
-            await prefs.remove('saved_id');
-            await prefs.setBool('save_id', false);
-          }
-
-          // "자동 로그인" 설정 저장 (토큰 연동은 나중에)
-          await prefs.setBool('auto_login', _autoLogin);
-
-          if (!mounted) return;
-
-          // 🔸 HomePage로 이동 (뒤로가기 누르면 로그인으로 안 돌아오게)
+      if (role == "BRANCH") {
+        Navigator.pushReplacementNamed(
+          context,
+          "/home",
+          arguments: {'name': name, 'userId': userId},
+        );
+      } else if (role == "HQ") {
+        if (kIsWeb) {
           Navigator.pushReplacementNamed(
             context,
-            "/home",
+            "/admin_web",
             arguments: {'name': name, 'userId': userId},
           );
         } else {
-          // status != 200 인 경우
-          final msg = decoded["msg"] ?? "알 수 없는 오류";
-          setState(() {
-            _loginError = "에러발생";
-          });
-          ;
-          _showSnackBar("요청 실패: $msg");
+          Navigator.pushReplacementNamed(
+            context,
+            "/admin_app",
+            arguments: {'name': name, 'userId': userId},
+          );
         }
-      } else if (res.statusCode == 401) {
-        setState(() {
-          _loginError = "아이디 혹은 비밀번호가 틀렸습니다.";
-        });
-        Future.delayed(const Duration(seconds: 5), () {
-          if (mounted) {
-            setState(() => _loginError = null);
-          }
-        });
-        // _showSnackBar("아aaa이디 혹은 비밀번호가 틀렸습니다.");
-
-        // ✅ 3) 그 외 상태코드 → 진짜 서버 오류
       } else {
-        _showSnackBar("서버 오류가 발생했습니다. (코드: ${res.statusCode})");
-        print("실패: ${res.statusCode} ${res.body}");
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("알 수 없는 사용자 권한입니다.")));
       }
     } catch (e) {
-      _showSnackBar("네트워크 오류: $e");
-      print("예외 발생: $e");
+      // SessionNotifier.login()에서 던진 에러 처리
+      setState(() {
+        _loginError = "로그인 실패: ${e.toString()}";
+      });
+      Future.delayed(const Duration(seconds: 5), () {
+        if (mounted) setState(() => _loginError = null);
+      });
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -198,8 +190,6 @@ class _CustomFormState extends State<CustomForm> {
                 CustomTextField("아이디", controller: idController),
                 SizedBox(height: medium_gap),
                 CustomTextField("비밀번호", controller: pwController),
-
-                // ✅ 아이디 저장 / 자동 로그인 Row
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -217,20 +207,6 @@ class _CustomFormState extends State<CustomForm> {
                         const Text('아이디 저장'),
                       ],
                     ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Checkbox(
-                          value: _autoLogin,
-                          onChanged: (value) {
-                            setState(() {
-                              _autoLogin = value ?? false;
-                            });
-                          },
-                        ),
-                        const Text('자동 로그인'),
-                      ],
-                    ),
                   ],
                 ),
                 SizedBox(height: large_gap),
@@ -244,7 +220,6 @@ class _CustomFormState extends State<CustomForm> {
                         )
                       : const Text("Login"),
                 ),
-                // 🔹 여기 추가: 로그인 에러 메시지 출력
                 if (_loginError != null) ...[
                   SizedBox(height: large_gap),
                   Align(

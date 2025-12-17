@@ -1,16 +1,40 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:juvis_faciliry/_core/session/session_provider.dart';
+import 'package:juvis_faciliry/components/home_components/home_bottom_nav.dart';
+import 'package:juvis_faciliry/components/home_components/home_header.dart';
 import 'package:juvis_faciliry/components/home_components/quick_title.dart';
+import 'package:juvis_faciliry/components/maintenance_components/maintenance_category.dart';
 
-class QuickActionsSection extends StatelessWidget {
+class QuickActionsSection extends ConsumerWidget {
   const QuickActionsSection({super.key});
 
+  void _goCreatePage(
+    BuildContext context,
+    MaintenanceCategory category,
+    String branchName,
+  ) {
+    Navigator.pushNamed(
+      context,
+      '/maintenance-create',
+      arguments: {
+        'category': category,
+        'homeHeader': HomeHeader(name: branchName), // ✅ 인스턴스 + name 주입
+        'bottomNav': const HomeBottomNav(), // ✅ 인스턴스
+      },
+    );
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final session = ref.watch(sessionProvider);
+    final branchName = session?.name ?? ''; // 세션 구조에 맞게 조정
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '빠른 접수',
+          '분야별 접수처',
           style: Theme.of(
             context,
           ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
@@ -23,13 +47,55 @@ class QuickActionsSection extends StatelessWidget {
           mainAxisSpacing: 12,
           crossAxisSpacing: 12,
           childAspectRatio: 1.15,
-          children: const [
-            QuickTile(icon: Icons.bolt, label: '전기/통신'),
-            QuickTile(icon: Icons.grid_on, label: '유리'),
-            QuickTile(icon: Icons.lightbulb_outline, label: '등기구'),
-            QuickTile(icon: Icons.local_fire_department, label: '소방'),
-            QuickTile(icon: Icons.table_bar, label: '간판'),
-            QuickTile(icon: Icons.grid_4x4, label: '타일'),
+          children: [
+            QuickTile(
+              icon: Icons.bolt,
+              label: '전기·통신',
+              onTap: () => _goCreatePage(
+                context,
+                MaintenanceCategory.ELECTRICAL_COMMUNICATION,
+                branchName,
+              ),
+            ),
+            QuickTile(
+              icon: Icons.grid_on,
+              label: '조명',
+              onTap: () => _goCreatePage(
+                context,
+                MaintenanceCategory.LIGHTING,
+                branchName,
+              ),
+            ),
+            QuickTile(
+              icon: Icons.lightbulb_outline,
+              label: '공조·환기',
+              onTap: () =>
+                  _goCreatePage(context, MaintenanceCategory.HVAC, branchName),
+            ),
+            QuickTile(
+              icon: Icons.local_fire_department,
+              label: '급·배수',
+              onTap: () => _goCreatePage(
+                context,
+                MaintenanceCategory.WATER_SUPPLY_DRAINAGE,
+                branchName,
+              ),
+            ),
+            QuickTile(
+              icon: Icons.table_bar,
+              label: '안전·위생',
+              onTap: () => _goCreatePage(
+                context,
+                MaintenanceCategory.SAFETY_HYGIENE,
+                branchName,
+              ),
+            ),
+            QuickTile(
+              icon: Icons.grid_4x4,
+              label: '기타',
+              onTap: () =>
+                  _goCreatePage(context, MaintenanceCategory.ETC, branchName),
+            ),
           ],
         ),
       ],

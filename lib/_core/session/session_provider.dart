@@ -2,10 +2,10 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
+import 'package:juvis_faciliry/_core/util/auth_request.dart';
+import 'package:juvis_faciliry/_core/util/token_storage.dart';
+import 'package:juvis_faciliry/config/api_config.dart';
 
-import '../_core/util/auth_request.dart';
-import '../_core/util/token_storage.dart';
-import '../config/api_config.dart';
 import 'session_user.dart';
 
 final sessionProvider = StateNotifierProvider<SessionNotifier, SessionUser?>(
@@ -44,13 +44,16 @@ class SessionNotifier extends StateNotifier<SessionUser?> {
       final decoded = jsonDecode(res.body);
       final body = decoded['body'];
 
+      // ✅ authRequest가 토큰을 갱신했을 수 있으니 다시 읽기
+      final latestAccessToken = await TokenStorage.getAccessToken() ?? '';
+
       state = SessionUser(
         id: body['userId'] ?? body['id'],
         // 서버 응답 키 차이 대비
         username: body['username'],
         name: body['name'],
         role: body['role'],
-        jwt: accessToken ?? '', // (권장) SessionUser에서 jwt 필드 제거 가능
+        jwt: latestAccessToken,
       );
     } catch (_) {
       await logout();
