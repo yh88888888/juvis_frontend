@@ -6,6 +6,7 @@ import 'package:juvis_faciliry/components/maintenance_components/maintenance_cat
 import 'package:juvis_faciliry/pages/admin_app_page.dart';
 import 'package:juvis_faciliry/pages/admin_page.dart';
 import 'package:juvis_faciliry/pages/home_page.dart';
+import 'package:juvis_faciliry/pages/list_page.dart';
 import 'package:juvis_faciliry/pages/login_page.dart';
 import 'package:juvis_faciliry/pages/maintenance_create_page.dart';
 import 'package:juvis_faciliry/pages/maintenance_detail.dart';
@@ -87,6 +88,7 @@ class _JuvisAppState extends ConsumerState<JuvisApp> {
         "/admin_web": (context) => AdminPage(),
         "/admin_app": (context) => AdminAppPage(),
         "/maintenance-list": (context) => MaintenanceListPage(),
+        '/list': (_) => const ListPage(),
       },
       onGenerateRoute: (settings) {
         if (settings.name == '/maintenance-detail') {

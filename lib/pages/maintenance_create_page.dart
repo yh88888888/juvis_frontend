@@ -3,14 +3,13 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:juvis_faciliry/components/maintenance_components/maintenance_api.dart';
 import 'package:juvis_faciliry/components/maintenance_components/maintenance_category.dart';
+import 'package:juvis_faciliry/components/photo_components/photo_maintenance_api.dart';
+import 'package:juvis_faciliry/components/photo_components/photo_models.dart';
 import 'package:juvis_faciliry/components/photo_components/photo_upload_contoller.dart';
 
 class MaintenanceCreatePage extends StatefulWidget {
   final MaintenanceCategory category;
-
-  /// ✅ Bottom nav는 그대로
   final Widget? bottomNav;
 
   const MaintenanceCreatePage({
@@ -29,7 +28,7 @@ class _MaintenanceCreatePageState extends State<MaintenanceCreatePage> {
   final _titleCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
 
-  // ✅ 사진 업로드 로직 분리
+  // ✅ 사진 업로드 로직
   late final PhotoUploadController _photoCtrl;
 
   bool _locked = false;
@@ -130,7 +129,7 @@ class _MaintenanceCreatePageState extends State<MaintenanceCreatePage> {
         );
         return;
       }
-
+      // ✅ maintenance Id 생성되어 수신
       final map = jsonDecode(res.body) as Map<String, dynamic>;
       final body = (map['body'] ?? map) as Map<String, dynamic>;
       _maintenanceId = (body['id'] as num).toInt();
@@ -140,9 +139,12 @@ class _MaintenanceCreatePageState extends State<MaintenanceCreatePage> {
         _locked = true;
       });
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('저장이 완료되었습니다.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('저장이 완료되었습니다.'),
+          duration: Duration(seconds: 2), // ✅ 유지 시간 절반
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -166,6 +168,9 @@ class _MaintenanceCreatePageState extends State<MaintenanceCreatePage> {
     setState(() => _loading = true);
 
     try {
+      debugPrint(
+        "SUBMIT id=$_maintenanceId saved=$_saved locked=$_locked submitted=$_submitted",
+      );
       final res = await MaintenanceApi.submit(_maintenanceId!);
 
       if (!mounted) return;
@@ -175,9 +180,18 @@ class _MaintenanceCreatePageState extends State<MaintenanceCreatePage> {
           _submitted = true;
           _locked = true;
         });
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('제출이 완료되었습니다.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('제출이 완료되었습니다.'),
+            duration: Duration(seconds: 2), // ✅ 유지 시간 절반
+          ),
+        );
+
+        // ✅ SnackBar 시간만큼 기다렸다가 이동
+        await Future.delayed(const Duration(seconds: 2));
+        if (!mounted) return;
+
+        Navigator.of(context).pop(true); // 🔹 목록으로 돌아가기
       } else {
         debugPrint('SUBMIT fail status=${res.statusCode}, body=${res.body}');
         ScaffoldMessenger.of(context).showSnackBar(
@@ -296,7 +310,7 @@ class _MaintenanceCreatePageState extends State<MaintenanceCreatePage> {
                     maxLines: null,
                     decoration: const InputDecoration(
                       labelText: '내용',
-                      hintText: '증상/위치/발생시간/사진 여부 등을 자세히 적어주세요.',
+                      hintText: '증상/위치/사진 여부 등을 자세히 적어주세요.',
                       border: InputBorder.none,
                     ),
                   ),
@@ -340,7 +354,7 @@ class _MaintenanceCreatePageState extends State<MaintenanceCreatePage> {
                           ),
                         const SizedBox(height: 10),
                         Text(
-                          '업로드 상태: $uploadedCount/${files.length} 완료',
+                          '업로드 상태: $uploadedCount/${files.length}',
                           style: const TextStyle(color: Colors.black54),
                         ),
                       ],

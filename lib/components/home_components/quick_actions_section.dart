@@ -49,7 +49,7 @@ class QuickActionsSection extends ConsumerWidget {
           childAspectRatio: 1.15,
           children: [
             QuickTile(
-              icon: Icons.bolt,
+              icon: Icons.electrical_services, // 전기/통신
               label: '전기·통신',
               onTap: () => _goCreatePage(
                 context,
@@ -58,7 +58,7 @@ class QuickActionsSection extends ConsumerWidget {
               ),
             ),
             QuickTile(
-              icon: Icons.grid_on,
+              icon: Icons.lightbulb_outline, // 조명
               label: '조명',
               onTap: () => _goCreatePage(
                 context,
@@ -67,13 +67,13 @@ class QuickActionsSection extends ConsumerWidget {
               ),
             ),
             QuickTile(
-              icon: Icons.lightbulb_outline,
+              icon: Icons.air, // 공조/환기
               label: '공조·환기',
               onTap: () =>
                   _goCreatePage(context, MaintenanceCategory.HVAC, branchName),
             ),
             QuickTile(
-              icon: Icons.local_fire_department,
+              icon: Icons.water_drop, // 급/배수
               label: '급·배수',
               onTap: () => _goCreatePage(
                 context,
@@ -82,7 +82,7 @@ class QuickActionsSection extends ConsumerWidget {
               ),
             ),
             QuickTile(
-              icon: Icons.table_bar,
+              icon: Icons.health_and_safety, // 안전/위생
               label: '안전·위생',
               onTap: () => _goCreatePage(
                 context,
@@ -91,7 +91,7 @@ class QuickActionsSection extends ConsumerWidget {
               ),
             ),
             QuickTile(
-              icon: Icons.grid_4x4,
+              icon: Icons.more_horiz, // 기타
               label: '기타',
               onTap: () =>
                   _goCreatePage(context, MaintenanceCategory.ETC, branchName),

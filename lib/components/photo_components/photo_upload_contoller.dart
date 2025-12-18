@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'photo_models.dart';
-import 'photo_upload.dart';
+import 'photo_presign.dart';
 
 class PhotoUploadController extends ChangeNotifier {
   PhotoUploadController({ImagePicker? picker})

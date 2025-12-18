@@ -73,7 +73,7 @@ class HomePage extends ConsumerWidget {
                   onPressed: () {
                     Navigator.pushNamed(
                       context,
-                      '/maintenance-list', // 새로 만들 목록 페이지 라우트
+                      '/list', // 새로 만들 목록 페이지 라우트
                     );
                   },
                   child: const Text('전체 목록 보기'),

@@ -1,49 +1,11 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:juvis_faciliry/_core/util/auth_request.dart';
+import 'package:juvis_faciliry/components/photo_components/photo_models.dart';
 
 import '../../config/api_config.dart';
-
-class PresignReq {
-  final String fileName;
-  final String contentType;
-
-  PresignReq({required this.fileName, required this.contentType});
-
-  Map<String, dynamic> toJson() => {
-    'fileName': fileName,
-    'contentType': contentType,
-  };
-}
-
-class PresignRes {
-  final String uploadUrl;
-  final String fileKey;
-  final String? publicUrl;
-
-  PresignRes({required this.uploadUrl, required this.fileKey, this.publicUrl});
-
-  factory PresignRes.fromJson(Map<String, dynamic> json) {
-    final uploadUrl = json['uploadUrl'];
-    final fileKey = json['fileKey'];
-    final publicUrl = json['publicUrl'];
-
-    if (uploadUrl == null || fileKey == null) {
-      throw Exception(
-        'presign 응답 필드 누락: uploadUrl=$uploadUrl, fileKey=$fileKey / json=$json',
-      );
-    }
-
-    return PresignRes(
-      uploadUrl: uploadUrl as String,
-      fileKey: fileKey as String,
-      publicUrl: publicUrl as String?, // ✅ 없으면 null
-    );
-  }
-}
 
 class UploadApi {
   static String buildPublicUrl(String fileKey) {
@@ -91,6 +53,7 @@ class UploadApi {
     return PresignRes.fromJson(body as Map<String, dynamic>);
   }
 
+  /// 2) S3 PUT 업로드 (presigned URL은 Authorization 헤더 넣으면 안되는 경우 많음)
   static Future<void> putToS3Bytes({
     required String uploadUrl,
     required List<int> bytes,
@@ -103,32 +66,6 @@ class UploadApi {
     );
 
     debugPrint('S3 PUT status=${res.statusCode}');
-    if (res.statusCode != 200 && res.statusCode != 204) {
-      debugPrint('S3 PUT body=${res.body}');
-      throw Exception('S3 업로드 실패 (status: ${res.statusCode})');
-    }
-  }
-
-  /// 2) S3 PUT 업로드 (presigned URL은 Authorization 헤더 넣으면 안되는 경우 많음)
-  static Future<void> putToS3({
-    required String uploadUrl,
-    required File file,
-    required String contentType,
-  }) async {
-    final bytes = await file.readAsBytes();
-
-    final res = await http.put(
-      Uri.parse(uploadUrl),
-      headers: {
-        // 🔴 테스트 중에는 Content-Type 제거 권장
-        // 'Content-Type': contentType,
-      },
-      body: bytes,
-    );
-
-    debugPrint('S3 PUT status=${res.statusCode}');
-    debugPrint('S3 PUT headers=${res.headers}');
-
     if (res.statusCode != 200 && res.statusCode != 204) {
       debugPrint('S3 PUT body=${res.body}');
       throw Exception('S3 업로드 실패 (status: ${res.statusCode})');
