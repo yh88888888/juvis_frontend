@@ -17,6 +17,7 @@ class _HomeBottomNavState extends ConsumerState<HomeBottomNav> {
   Widget build(BuildContext context) {
     return NavigationBar(
       selectedIndex: _selectedIndex,
+      indicatorColor: Colors.transparent, // 홈버튼 테두리 없애기
       onDestinationSelected: (index) async {
         if (index == 3) {
           await _handleLogout();
@@ -29,8 +30,8 @@ class _HomeBottomNavState extends ConsumerState<HomeBottomNav> {
         }
 
         if (index == 0) {
-          // 예시: 홈으로 되돌리기
-          Navigator.popUntil(context, (route) => route.isFirst);
+          Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+          return;
         }
 
         setState(() => _selectedIndex = index);

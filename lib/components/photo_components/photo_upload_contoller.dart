@@ -10,65 +10,67 @@ class PhotoUploadController extends ChangeNotifier {
 
   final ImagePicker _picker;
 
-  // 로컬 선택된 파일
+  /// 로컬 선택된 파일
   final List<XFile> localPhotos = [];
 
-  // 업로드 완료(서버 attach 가능한 정보)
-  final List<UploadedPhoto> uploadedPhotos = [];
+  /// ✅ key: XFile.path, value: 업로드 결과
+  final Map<String, UploadedPhoto> _uploadedByPath = {};
 
-  // 업로드 중 상태 (추가)
   bool _isUploading = false;
 
   bool get isUploading => _isUploading;
 
-  // "현재 로컬 사진 수 == 업로드 완료 수"여야 업로드 완료
-  bool get allPhotosUploaded => localPhotos.length == uploadedPhotos.length;
+  /// ✅ UI에서 쓰는 업로드 결과(현재 localPhotos 순서대로)
+  List<UploadedPhoto> get uploadedPhotos => localPhotos
+      .map((x) => _uploadedByPath[x.path])
+      .whereType<UploadedPhoto>()
+      .toList();
+
+  /// "현재 로컬 사진 수 == 업로드 완료 수"여야 업로드 완료
+  bool get allPhotosUploaded => uploadedPhotos.length == localPhotos.length;
 
   Future<void> pickImages({int imageQuality = 85}) async {
     final images = await _picker.pickMultiImage(imageQuality: imageQuality);
     if (images.isEmpty) return;
 
-    localPhotos.addAll(images);
+    // ✅ 같은 path 중복 선택 방지
+    final existing = localPhotos.map((e) => e.path).toSet();
+    for (final img in images) {
+      if (!existing.contains(img.path)) {
+        localPhotos.add(img);
+      }
+    }
     notifyListeners();
   }
 
   void removeLocalPhoto(int index) {
-    // 업로드 중에는 변경 막는게 안전 (선택)
     if (_isUploading) return;
 
-    if (index < uploadedPhotos.length) {
-      uploadedPhotos.removeAt(index);
-    }
-    localPhotos.removeAt(index);
+    final removed = localPhotos.removeAt(index);
+    _uploadedByPath.remove(removed.path); // ✅ 캐시도 함께 제거
     notifyListeners();
   }
 
-  Future<void> uploadAllPhotosIfNeeded() async {
-    debugPrint(
-      'UPLOAD ENTER local=${localPhotos.length}, uploaded=${uploadedPhotos.length}, isUploading=$_isUploading',
-    );
-    if (allPhotosUploaded) return;
+  /// ✅ 저장할 때만 호출
+  /// - 이미 업로드된(path 동일) 파일은 presign/PUT을 건너뜀 → 중복 PUT 방지
+  Future<void> uploadMissingPhotosForSave() async {
     if (_isUploading) return;
 
     _isUploading = true;
     notifyListeners();
 
     try {
-      for (int i = uploadedPhotos.length; i < localPhotos.length; i++) {
-        debugPrint('UPLOAD LOOP i=$i / local=${localPhotos.length}');
+      for (final xfile in localPhotos) {
+        // ✅ 핵심: 같은 로컬 파일이면 재업로드 금지
+        if (_uploadedByPath.containsKey(xfile.path)) continue;
 
-        final xfile = localPhotos[i];
         final fileName = xfile.name;
-
         final lower = fileName.toLowerCase();
         final contentType = lower.endsWith('.png')
             ? 'image/png'
             : (lower.endsWith('.webp') ? 'image/webp' : 'image/jpeg');
 
         final bytes = await xfile.readAsBytes();
-        debugPrint(
-          'UPLOAD bytes=${bytes.length}, fileName=$fileName, type=$contentType',
-        );
 
         // 1) presign
         final presign = await UploadApi.presign(
@@ -76,7 +78,7 @@ class PhotoUploadController extends ChangeNotifier {
           contentType: contentType,
         );
 
-        // 2) PUT upload to S3
+        // 2) PUT to S3
         await UploadApi.putToS3Bytes(
           uploadUrl: presign.uploadUrl,
           bytes: bytes,
@@ -86,15 +88,13 @@ class PhotoUploadController extends ChangeNotifier {
         final publicUrl =
             presign.publicUrl ?? UploadApi.buildPublicUrl(presign.fileKey);
 
-        uploadedPhotos.add(
-          UploadedPhoto(fileKey: presign.fileKey, publicUrl: publicUrl),
+        _uploadedByPath[xfile.path] = UploadedPhoto(
+          fileKey: presign.fileKey,
+          publicUrl: publicUrl,
         );
 
         notifyListeners();
       }
-    } catch (e) {
-      debugPrint('UPLOAD ERROR: $e');
-      rethrow;
     } finally {
       _isUploading = false;
       notifyListeners();
@@ -105,9 +105,9 @@ class PhotoUploadController extends ChangeNotifier {
       uploadedPhotos.map((p) => p.fileKey).toList();
 
   void clear() {
-    if (_isUploading) return; // 선택
+    if (_isUploading) return;
     localPhotos.clear();
-    uploadedPhotos.clear();
+    _uploadedByPath.clear();
     notifyListeners();
   }
 }

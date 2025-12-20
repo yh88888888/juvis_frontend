@@ -9,7 +9,7 @@ import 'package:juvis_faciliry/pages/home_page.dart';
 import 'package:juvis_faciliry/pages/list_page.dart';
 import 'package:juvis_faciliry/pages/login_page.dart';
 import 'package:juvis_faciliry/pages/maintenance_create_page.dart';
-import 'package:juvis_faciliry/pages/maintenance_detail.dart';
+import 'package:juvis_faciliry/pages/maintenance_detail_page.dart';
 import 'package:juvis_faciliry/pages/maintenance_list_page.dart'; // ✅ 네가 만든 Session Provider 경로에 맞춰 수정해줘
 
 void main() {
@@ -89,16 +89,12 @@ class _JuvisAppState extends ConsumerState<JuvisApp> {
         "/admin_app": (context) => AdminAppPage(),
         "/maintenance-list": (context) => MaintenanceListPage(),
         '/list': (_) => const ListPage(),
+        '/detail': (context) {
+          final id = ModalRoute.of(context)!.settings.arguments as int;
+          return MaintenanceDetailPage(maintenanceId: id);
+        },
       },
       onGenerateRoute: (settings) {
-        if (settings.name == '/maintenance-detail') {
-          final args = settings.arguments as Map<String, dynamic>;
-          final id = args['id'] as int;
-          return MaterialPageRoute(
-            builder: (_) => MaintenanceDetailPage(id: id),
-          );
-        }
-
         if (settings.name == '/maintenance-create') {
           final args = settings.arguments as Map<String, dynamic>;
 

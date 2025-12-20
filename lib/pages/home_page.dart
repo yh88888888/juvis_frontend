@@ -9,6 +9,8 @@ import 'package:juvis_faciliry/components/home_components/quick_actions_section.
 class HomePage extends ConsumerWidget {
   static const softPink = Color(0xFFFFD1DC);
   static const softPinkBg = Color(0xFFFFE9EE);
+
+  // static const blueBtn = Color(0xFFFFFEF6);
   static const blueBtn = Color(0xFF2E66FF);
 
   const HomePage({super.key});

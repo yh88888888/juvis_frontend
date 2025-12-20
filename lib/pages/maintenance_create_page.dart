@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:juvis_faciliry/components/maintenance_components/maintenance_category.dart';
 import 'package:juvis_faciliry/components/photo_components/photo_maintenance_api.dart';
 import 'package:juvis_faciliry/components/photo_components/photo_models.dart';
+import 'package:juvis_faciliry/components/photo_components/photo_status_source.dart';
 import 'package:juvis_faciliry/components/photo_components/photo_upload_contoller.dart';
 
 class MaintenanceCreatePage extends StatefulWidget {
@@ -35,6 +36,7 @@ class _MaintenanceCreatePageState extends State<MaintenanceCreatePage> {
   bool _saved = false;
   bool _submitted = false;
   bool _loading = false;
+  PhotoStatusSource _photoStatusSource = PhotoStatusSource.none;
 
   static const Color pageBg = Color(0xFFFFF3F6);
 
@@ -60,16 +62,11 @@ class _MaintenanceCreatePageState extends State<MaintenanceCreatePage> {
     setState(() {
       _saved = false;
       _loading = true; // 업로드 진행 표시
+      _photoStatusSource = PhotoStatusSource.pick; // ✅ 추가
     });
 
     try {
       await _photoCtrl.pickImages(imageQuality: 85);
-      await _photoCtrl.uploadAllPhotosIfNeeded(); // ✅ 선택 직후 업로드
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('사진 업로드 실패: $e')));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -85,10 +82,6 @@ class _MaintenanceCreatePageState extends State<MaintenanceCreatePage> {
     _photoCtrl.removeLocalPhoto(index);
   }
 
-  Future<void> _uploadAllPhotosIfNeeded() async {
-    await _photoCtrl.uploadAllPhotosIfNeeded();
-  }
-
   void _unlockFieldsForEdit() {
     setState(() {
       _locked = false;
@@ -99,11 +92,14 @@ class _MaintenanceCreatePageState extends State<MaintenanceCreatePage> {
   Future<void> _onSavePressed() async {
     if (_submitted) return;
 
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _photoStatusSource = PhotoStatusSource.save; // ✅ 추가
+    });
 
     try {
       // ✅ 사진 선택되어 있으면 업로드 먼저
-      await _photoCtrl.uploadAllPhotosIfNeeded();
+      await _photoCtrl.uploadMissingPhotosForSave();
 
       final photos = _photoCtrl.uploadedPhotos
           .map((p) => MaintenancePhotoDto(fileKey: p.fileKey, url: p.publicUrl))
@@ -139,12 +135,12 @@ class _MaintenanceCreatePageState extends State<MaintenanceCreatePage> {
         _locked = true;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('저장이 완료되었습니다.'),
-          duration: Duration(seconds: 2), // ✅ 유지 시간 절반
-        ),
-      );
+      // ScaffoldMessenger.of(context).showSnackBar(
+      //   const SnackBar(
+      //     content: Text('저장이 완료되었습니다.'),
+      //     duration: Duration(seconds: 2), // ✅ 유지 시간 절반
+      //   ),
+      // );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -180,18 +176,21 @@ class _MaintenanceCreatePageState extends State<MaintenanceCreatePage> {
           _submitted = true;
           _locked = true;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('제출이 완료되었습니다.'),
-            duration: Duration(seconds: 2), // ✅ 유지 시간 절반
-          ),
-        );
+        // ScaffoldMessenger.of(context).showSnackBar(
+        //   const SnackBar(
+        //     content: Text('제출이 완료되었습니다.'),
+        //     duration: Duration(seconds: 2), // ✅ 유지 시간 절반
+        //   ),
+        // );
 
         // ✅ SnackBar 시간만큼 기다렸다가 이동
         await Future.delayed(const Duration(seconds: 2));
         if (!mounted) return;
 
-        Navigator.of(context).pop(true); // 🔹 목록으로 돌아가기
+        // ✅ 리스트 화면으로 이동 (이전 스택 정리)
+        Navigator.of(
+          context,
+        ).pushNamedAndRemoveUntil('/list', (route) => false);
       } else {
         debugPrint('SUBMIT fail status=${res.statusCode}, body=${res.body}');
         ScaffoldMessenger.of(context).showSnackBar(
@@ -228,7 +227,7 @@ class _MaintenanceCreatePageState extends State<MaintenanceCreatePage> {
         centerTitle: true,
         title: Text.rich(
           TextSpan(
-            text: '쥬비스다이어트 ',
+            text: '요청서 작성',
             style: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w900,
@@ -246,12 +245,12 @@ class _MaintenanceCreatePageState extends State<MaintenanceCreatePage> {
             key: _formKey,
             child: Column(
               children: [
-                Text(
-                  '유지보수 요청서 작성',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                ),
+                // Text(
+                //   '유지보수 요청서 작성',
+                //   style: Theme.of(
+                //     context,
+                //   ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                // ),
                 const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -324,12 +323,40 @@ class _MaintenanceCreatePageState extends State<MaintenanceCreatePage> {
                     final files = _photoCtrl.localPhotos;
                     final uploadedCount = _photoCtrl.uploadedPhotos.length;
 
+                    // ✅ 문구 결정
+                    String statusText;
+
+                    if (files.isEmpty) {
+                      statusText = '';
+                    }
+                    // 🔄 저장 중 / 업로드 중
+                    else if (_loading || _photoCtrl.isUploading) {
+                      if (_photoStatusSource == PhotoStatusSource.save) {
+                        statusText =
+                            '사진을 업로드하고 있습니다... ($uploadedCount/${files.length})';
+                      } else {
+                        statusText = '사진을 불러오는 중입니다...';
+                      }
+                    }
+                    // ✅ 저장 완료 후
+                    else if (_saved) {
+                      statusText = '사진 ${files.length}장이 저장되었습니다.';
+                    }
+                    // 📸 사진올리기 직후 (저장 전)
+                    else {
+                      if (_photoStatusSource == PhotoStatusSource.pick) {
+                        statusText = '사진 ${files.length}장이 추가되었습니다.';
+                      } else {
+                        statusText = '사진 ${files.length}장 선택됨 (저장 시 업로드)';
+                      }
+                    }
+
                     return Column(
                       children: [
                         Row(
                           children: [
                             const Text(
-                              '사진',
+                              '첨부 사진',
                               style: TextStyle(fontWeight: FontWeight.w800),
                             ),
                             const Spacer(),
@@ -338,13 +365,13 @@ class _MaintenanceCreatePageState extends State<MaintenanceCreatePage> {
                                   ? null
                                   : _pickImages,
                               icon: const Icon(Icons.photo_library_outlined),
-                              label: const Text('추가'),
+                              label: const Text('사진올리기'),
                             ),
                           ],
                         ),
                         const SizedBox(height: 10),
                         if (files.isEmpty)
-                          const Text('선택된 사진이 없습니다.')
+                          const Text('사진을 추가해 주세요')
                         else
                           _PhotoGrid(
                             files: files,
@@ -354,7 +381,7 @@ class _MaintenanceCreatePageState extends State<MaintenanceCreatePage> {
                           ),
                         const SizedBox(height: 10),
                         Text(
-                          '업로드 상태: $uploadedCount/${files.length}',
+                          statusText,
                           style: const TextStyle(color: Colors.black54),
                         ),
                       ],
@@ -368,15 +395,17 @@ class _MaintenanceCreatePageState extends State<MaintenanceCreatePage> {
                     Expanded(
                       child: ElevatedButton(
                         onPressed: canSave ? _onSavePressed : null,
-                        child: _loading
-                            ? const SizedBox(
-                                height: 18,
-                                width: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text('저장'),
+                        child:
+                            // _loading
+                            //     ? const SizedBox(
+                            //         height: 18,
+                            //         width: 18,
+                            //         child: CircularProgressIndicator(
+                            //           strokeWidth: 2,
+                            //         ),
+                            //       )
+                            //     :
+                            const Text('저장'),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -451,8 +480,8 @@ class _StatusHint extends StatelessWidget {
     final String text = submitted
         ? '제출 완료 상태입니다.'
         : saved
-        ? (allPhotosUploaded ? '저장 완료: 제출 가능' : '저장 전 사진 업로드가 필요합니다.')
-        : '작성 후 저장하면 입력칸이 잠깁니다. 수정 후에는 다시 저장해야 제출할 수 있어요.';
+        ? (allPhotosUploaded ? '' : '저장 전 사진 업로드가 필요합니다.')
+        : '[저장 후 제출가능]';
 
     return Text(text, style: const TextStyle(color: Colors.black54));
   }
@@ -496,21 +525,21 @@ class _PhotoGrid extends StatelessWidget {
                 ),
               ),
             ),
-            Positioned(
-              left: 6,
-              top: 6,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(999),
-                  color: Colors.black.withOpacity(0.55),
-                ),
-                child: Text(
-                  uploaded ? '업로드됨' : '대기',
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                ),
-              ),
-            ),
+            // Positioned(
+            //   left: 6,
+            //   top: 6,
+            //   child: Container(
+            //     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            //     decoration: BoxDecoration(
+            //       borderRadius: BorderRadius.circular(999),
+            //       color: Colors.black.withOpacity(0.55),
+            //     ),
+            //     child: Text(
+            //       uploaded ? '업로드됨' : '업로드전',
+            //       style: const TextStyle(color: Colors.white, fontSize: 12),
+            //     ),
+            //   ),
+            // ),
             if (!locked)
               Positioned(
                 right: 6,
