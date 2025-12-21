@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:juvis_faciliry/components/detail_components/detail_provider.dart';
+import 'package:juvis_faciliry/components/detail_photo_components/attachment_preview.dart';
 
 class MaintenanceDetailPage extends ConsumerWidget {
   final int maintenanceId;
@@ -93,6 +94,7 @@ class MaintenanceDetailPage extends ConsumerWidget {
             ),
 
             const SizedBox(height: 12),
+            const SizedBox(height: 12),
             _sectionCard(
               title: '요청 내용',
               children: [
@@ -110,7 +112,15 @@ class MaintenanceDetailPage extends ConsumerWidget {
                 ),
               ],
             ),
-
+            const SizedBox(height: 12),
+            _sectionCard(
+              title: '붙임파일',
+              children: [
+                AttachmentPreview(
+                  imageUrls: d.attachPhotoUrls, // 나중에 연결
+                ),
+              ],
+            ),
             const SizedBox(height: 12),
             _sectionCard(
               title: '업체 / 견적 / 작업기간',

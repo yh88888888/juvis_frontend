@@ -13,6 +13,8 @@ class MaintenanceDetailItem {
   final String category;
   final String categoryName;
 
+  final List<String> attachPhotoUrls;
+
   final String? vendorName;
   final String? vendorPhone;
 
@@ -44,6 +46,7 @@ class MaintenanceDetailItem {
     required this.status,
     required this.category,
     required this.categoryName,
+    required this.attachPhotoUrls,
     this.vendorName,
     this.vendorPhone,
     this.estimateAmount,
@@ -67,6 +70,14 @@ class MaintenanceDetailItem {
   static DateTime? _date(dynamic v) =>
       v == null ? null : DateTime.parse(v as String);
 
+  static List<String> _urls(dynamic v) {
+    if (v == null) return const [];
+    if (v is List) {
+      return v.whereType<String>().toList();
+    }
+    return const [];
+  }
+
   factory MaintenanceDetailItem.fromJson(Map<String, dynamic> json) {
     return MaintenanceDetailItem(
       id: (json['id'] as num).toInt(),
@@ -79,6 +90,10 @@ class MaintenanceDetailItem {
       status: (json['status'] ?? '') as String,
       category: (json['category'] ?? '') as String,
       categoryName: (json['categoryName'] ?? '') as String,
+
+      // ✅ 여기서 받아오기 (백엔드 JSON 키도 이 이름으로 맞추는 걸 추천)
+      attachPhotoUrls: _urls(json['attachPhotoUrls']),
+
       vendorName: json['vendorName'] as String?,
       vendorPhone: json['vendorPhone'] as String?,
       estimateAmount: json['estimateAmount']?.toString(),

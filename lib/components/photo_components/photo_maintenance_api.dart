@@ -13,7 +13,7 @@ class MaintenanceApi {
         Uri.parse('$apiBase/api/branch/maintenances'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $accessToken',
+          'Authorization': '$accessToken',
         },
         body: jsonEncode(dto.toJson()),
       );
@@ -26,7 +26,7 @@ class MaintenanceApi {
         Uri.parse('$apiBase/api/branch/maintenances/$id/submit'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $accessToken',
+          'Authorization': '$accessToken',
         },
       );
     });

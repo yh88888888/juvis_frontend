@@ -14,7 +14,7 @@ class MaintenanceDetailApi {
       return http.get(
         uri,
         headers: {
-          'Authorization': 'Bearer $accessToken',
+          'Authorization': '$accessToken',
           'Content-Type': 'application/json',
         },
       );

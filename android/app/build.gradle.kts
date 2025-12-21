@@ -12,6 +12,7 @@ android {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = "27.0.12077973"
 
+
     // ✅ core library desugaring + Java 버전 설정은 여기 한 번만
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -20,7 +21,7 @@ android {
     }
 
     kotlinOptions {
-        jvmTarget = "11"
+        jvmTarget = "17"
     }
 
     defaultConfig {

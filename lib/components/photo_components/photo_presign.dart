@@ -73,24 +73,25 @@ class UploadApi {
   }
 
   /// 3) maintenance에 사진 메타 등록
-  static Future<void> attachPhoto({
-    required int maintenanceId,
-    required String fileKey,
-    required String url,
-  }) async {
-    final res = await authRequest((accessToken) {
-      return http.post(
-        Uri.parse('$apiBase/api/maintenance/$maintenanceId/photos'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $accessToken',
-        },
-        body: jsonEncode({'fileKey': fileKey, 'url': url}),
-      );
-    });
-
-    if (res.statusCode != 200) {
-      throw Exception('사진 메타 저장 실패 (status: ${res.statusCode})');
-    }
-  }
+  // static Future<void> attachPhoto({
+  //   required int maintenanceId,
+  //   required String fileKey,
+  //   // required String url,
+  // }) async {
+  //   final res = await authRequest((accessToken) {
+  //     return http.post(
+  //       Uri.parse('$apiBase/api/maintenance/$maintenanceId/photos'),
+  //       headers: {
+  //         'Content-Type': 'application/json',
+  //         'Authorization': 'Bearer $accessToken',
+  //       },
+  //       body: jsonEncode({'fileKey': fileKey}),
+  //       //   'url': url
+  //     );
+  //   });
+  //
+  //   if (res.statusCode != 200) {
+  //     throw Exception('사진 메타 저장 실패 (status: ${res.statusCode})');
+  //   }
+  // }
 }
