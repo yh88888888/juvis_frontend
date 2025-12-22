@@ -23,17 +23,29 @@ class MaintenanceDetailItem {
   final DateTime? workStartDate;
   final DateTime? workEndDate;
 
+  final int estimateResubmitCount;
+
   final String? resultComment;
   final String? resultPhotoUrl;
   final DateTime? workCompletedAt;
 
-  final String? approvedByName;
-  final DateTime? approvedAt;
+  // ✅ 1차 승인(지점요청 승인: REQUESTED -> ESTIMATING)
+  final String? requestApprovedByName;
+  final DateTime? requestApprovedAt;
+
+  // ✅ 2차 승인(견적 승인: APPROVAL_PENDING -> IN_PROGRESS)
+  final String? estimateApprovedByName;
+  final DateTime? estimateApprovedAt;
+
+  // ✅ 1차 반려 사유 (REQUESTED -> HQ1_REJECTED)
+  final String? requestRejectedReason;
+
+  // ✅ 2차 반려 사유 (APPROVAL_PENDING -> HQ2_REJECTED)
+  final String? estimateRejectedReason;
 
   final DateTime? createdAt;
   final DateTime? submittedAt;
   final DateTime? vendorSubmittedAt;
-  final String? rejectedReason;
 
   MaintenanceDetailItem({
     required this.id,
@@ -53,15 +65,19 @@ class MaintenanceDetailItem {
     this.estimateComment,
     this.workStartDate,
     this.workEndDate,
+    required this.estimateResubmitCount,
     this.resultComment,
     this.resultPhotoUrl,
     this.workCompletedAt,
-    this.approvedByName,
-    this.approvedAt,
+    this.requestApprovedByName,
+    this.requestApprovedAt,
+    this.estimateApprovedByName,
+    this.estimateApprovedAt,
+    this.requestRejectedReason,
+    this.estimateRejectedReason,
     this.createdAt,
     this.submittedAt,
     this.vendorSubmittedAt,
-    this.rejectedReason,
   });
 
   static DateTime? _dt(dynamic v) =>
@@ -72,9 +88,7 @@ class MaintenanceDetailItem {
 
   static List<String> _urls(dynamic v) {
     if (v == null) return const [];
-    if (v is List) {
-      return v.whereType<String>().toList();
-    }
+    if (v is List) return v.whereType<String>().toList();
     return const [];
   }
 
@@ -90,25 +104,32 @@ class MaintenanceDetailItem {
       status: (json['status'] ?? '') as String,
       category: (json['category'] ?? '') as String,
       categoryName: (json['categoryName'] ?? '') as String,
-
-      // ✅ 여기서 받아오기 (백엔드 JSON 키도 이 이름으로 맞추는 걸 추천)
       attachPhotoUrls: _urls(json['attachPhotoUrls']),
-
       vendorName: json['vendorName'] as String?,
       vendorPhone: json['vendorPhone'] as String?,
       estimateAmount: json['estimateAmount']?.toString(),
       estimateComment: json['estimateComment'] as String?,
       workStartDate: _date(json['workStartDate']),
       workEndDate: _date(json['workEndDate']),
+      estimateResubmitCount:
+          (json['estimateResubmitCount'] as num?)?.toInt() ?? 0,
       resultComment: json['resultComment'] as String?,
       resultPhotoUrl: json['resultPhotoUrl'] as String?,
       workCompletedAt: _dt(json['workCompletedAt']),
-      approvedByName: json['approvedByName'] as String?,
-      approvedAt: _dt(json['approvedAt']),
+
+      // ✅ 승인 1/2차
+      requestApprovedByName: json['requestApprovedByName'] as String?,
+      requestApprovedAt: _dt(json['requestApprovedAt']),
+      estimateApprovedByName: json['estimateApprovedByName'] as String?,
+      estimateApprovedAt: _dt(json['estimateApprovedAt']),
+
+      // ✅ 반려 1/2차 (백엔드 DTO에서 내려줘야 함)
+      requestRejectedReason: json['requestRejectedReason'] as String?,
+      estimateRejectedReason: json['estimateRejectedReason'] as String?,
+
       createdAt: _dt(json['createdAt']),
       submittedAt: _dt(json['submittedAt']),
       vendorSubmittedAt: _dt(json['vendorSubmittedAt']),
-      rejectedReason: json['rejectedReason'] as String?,
     );
   }
 }

@@ -17,12 +17,11 @@ class SessionNotifier extends StateNotifier<SessionUser?> {
 
   SessionNotifier(this.ref) : super(null);
 
-  /// 앱 시작 시 자동 세션 초기화: 토큰 있으면 /api/me로 사용자 로드
+  /// 앱 시작 시 자동 세션 초기화 (/api/me)
   Future<void> initSession() async {
     final accessToken = await TokenStorage.getAccessToken();
     final refreshToken = await TokenStorage.getRefreshToken();
 
-    // 둘 다 없으면 로그인 상태 아님
     if (accessToken == null && refreshToken == null) {
       state = null;
       return;
@@ -41,18 +40,17 @@ class SessionNotifier extends StateNotifier<SessionUser?> {
         return;
       }
 
-      final decoded = jsonDecode(res.body);
-      final body = decoded['body'];
+      final decoded = jsonDecode(res.body) as Map<String, dynamic>;
+      final body = decoded['body'] as Map<String, dynamic>;
 
-      // ✅ authRequest가 토큰을 갱신했을 수 있으니 다시 읽기
       final latestAccessToken = await TokenStorage.getAccessToken() ?? '';
 
       state = SessionUser(
-        id: body['userId'] ?? body['id'],
-        // 서버 응답 키 차이 대비
-        username: body['username'],
-        name: body['name'],
-        role: body['role'],
+        id: body['id'] ?? body['userId'],
+        username: (body['username'] ?? '') as String,
+        name: body['name'] as String?,
+        // ✅ HQ null 허용
+        role: (body['role'] ?? 'HQ') as String,
         jwt: latestAccessToken,
       );
     } catch (_) {
@@ -60,67 +58,64 @@ class SessionNotifier extends StateNotifier<SessionUser?> {
     }
   }
 
-  /// 로그인: 토큰 저장 + state 세팅
-  /// (UI에서는 await login(...) 후 화면 이동)
+  /// 로그인
   Future<SessionUser> login({
     required String username,
     required String password,
   }) async {
-    final uri = Uri.parse("$apiBase/api/auth/login");
+    final uri = Uri.parse('$apiBase/api/auth/login');
 
     final res = await http.post(
       uri,
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode({"username": username, "password": password}),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'username': username, 'password': password}),
     );
 
-    // HTTP 레벨 에러
     if (res.statusCode != 200 && res.statusCode != 201) {
-      throw Exception("서버 오류: ${res.statusCode}");
+      throw Exception('서버 오류: ${res.statusCode}');
     }
 
-    final decoded = jsonDecode(res.body);
+    // 🔎 디버그 로그 (개발 중 유지)
+    // ignore: avoid_print
+    print('LOGIN status=${res.statusCode}');
+    // ignore: avoid_print
+    print('LOGIN raw=${res.body}');
 
-    // Resp<T> 규격(status/msg/body) 기준
-    if (decoded["status"] != 200) {
-      final msg = decoded["msg"] ?? "알 수 없는 오류";
-      throw Exception("요청 실패: $msg");
+    final decoded = jsonDecode(res.body) as Map<String, dynamic>;
+
+    if (decoded['status'] != 200) {
+      throw Exception(decoded['msg'] ?? '로그인 실패');
     }
 
-    final body = decoded["body"] as Map<String, dynamic>;
+    final body = decoded['body'] as Map<String, dynamic>;
 
-    // ✅ 서버가 accessToken/refreshToken을 준다는 가정
-    final accessToken = body["accessToken"] as String?;
-    final refreshToken = body["refreshToken"] as String?;
+    final accessToken = body['accessToken'] as String?;
+    final refreshToken = body['refreshToken'] as String?;
 
     if (accessToken == null || refreshToken == null) {
-      throw Exception("토큰이 응답에 없습니다. (accessToken/refreshToken 확인 필요)");
+      throw Exception('토큰이 응답에 없습니다.');
     }
 
-    // ✅ 토큰 저장
+    final user = SessionUser(
+      id: body['id'] as int,
+      username: (body['username'] ?? '') as String,
+      name: body['name'] as String?,
+      // ✅ null 허용
+      role: (body['role'] ?? 'HQ') as String,
+      jwt: accessToken,
+    );
+
     await TokenStorage.saveAccessToken(accessToken);
     await TokenStorage.saveRefreshToken(refreshToken);
-
-    // ✅ state 세팅
-    final user = SessionUser(
-      id: body["id"] ?? body["userId"],
-      // 서버 키 차이 대비
-      username: body["username"],
-      name: body["name"],
-      role: body["role"],
-      jwt: accessToken, // (권장) SessionUser.jwt 제거 가능. 임시로 accessToken 넣음
-    );
 
     state = user;
     return user;
   }
 
-  /// state 직접 세팅이 필요할 때(특수 케이스)
   void setUser(SessionUser user) {
     state = user;
   }
 
-  /// 로그아웃: SecureStorage + state 정리
   Future<void> logout() async {
     state = null;
     await TokenStorage.clear();

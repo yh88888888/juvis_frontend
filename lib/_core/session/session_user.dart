@@ -1,14 +1,14 @@
 class SessionUser {
   final int id;
   final String username;
-  final String name;
+  final String? name;
   final String role;
   final String jwt;
 
   SessionUser({
     required this.id,
     required this.username,
-    required this.name,
+    this.name,
     required this.role,
     required this.jwt,
   });

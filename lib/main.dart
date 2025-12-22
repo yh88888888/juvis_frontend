@@ -10,7 +10,6 @@ import 'package:juvis_faciliry/pages/list_page.dart';
 import 'package:juvis_faciliry/pages/login_page.dart';
 import 'package:juvis_faciliry/pages/maintenance_create_page.dart';
 import 'package:juvis_faciliry/pages/maintenance_detail_page.dart';
-import 'package:juvis_faciliry/pages/maintenance_list_page.dart'; // ✅ 네가 만든 Session Provider 경로에 맞춰 수정해줘
 
 void main() {
   runApp(const ProviderScope(child: JuvisApp()));
@@ -87,7 +86,6 @@ class _JuvisAppState extends ConsumerState<JuvisApp> {
         "/home": (context) => HomePage(),
         "/admin_web": (context) => AdminPage(),
         "/admin_app": (context) => AdminAppPage(),
-        "/maintenance-list": (context) => MaintenanceListPage(),
         '/list': (_) => const ListPage(),
         '/detail': (context) {
           final id = ModalRoute.of(context)!.settings.arguments as int;

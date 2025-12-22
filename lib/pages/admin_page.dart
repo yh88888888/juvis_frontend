@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:juvis_faciliry/components/admin_web_component/hq_doc.dart';
 import 'package:juvis_faciliry/components/admin_web_component/hq_summary.dart';
 import 'package:juvis_faciliry/config/api_config.dart';
+import 'package:juvis_faciliry/pages/admin_list_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 // -------------- HQ 모바일 페이지 --------------
@@ -41,6 +42,15 @@ class _AdminPageState extends State<AdminPage> {
     if (_loading) {
       _fetchDashboardData();
     }
+  }
+
+  void _goList(String? status) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => HqRequestListPage(initialStatus: status),
+      ),
+    );
   }
 
   Future<void> _fetchDashboardData() async {
@@ -231,27 +241,35 @@ class _AdminPageState extends State<AdminPage> {
 class _SummaryCard extends StatelessWidget {
   final String title;
   final int count;
+  final VoidCallback? onTap;
 
-  const _SummaryCard({required this.title, required this.count});
+  const _SummaryCard({required this.title, required this.count, this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(fontSize: 13, color: Colors.grey),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '$count건',
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-          ],
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(fontSize: 13, color: Colors.grey),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '$count건',
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

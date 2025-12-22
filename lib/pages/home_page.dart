@@ -26,7 +26,7 @@ class HomePage extends ConsumerWidget {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    final String name = sessionUser.name;
+    final String name = sessionUser.name ?? '본사';
 
     return Scaffold(
       bottomNavigationBar: const HomeBottomNav(),
