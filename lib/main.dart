@@ -10,6 +10,13 @@ import 'package:juvis_faciliry/pages/list_page.dart';
 import 'package:juvis_faciliry/pages/login_page.dart';
 import 'package:juvis_faciliry/pages/maintenance_create_page.dart';
 import 'package:juvis_faciliry/pages/maintenance_detail_page.dart';
+import 'package:juvis_faciliry/pages/notification_page.dart';
+import 'package:juvis_faciliry/pages/vendor_list_page.dart';
+import 'package:juvis_faciliry/pages/vendor_page.dart';
+
+// ✅ 전역 RouteObserver (AdminAppPage에서 "돌아왔을 때" 감지)
+final RouteObserver<ModalRoute<void>> routeObserver =
+    RouteObserver<ModalRoute<void>>();
 
 void main() {
   runApp(const ProviderScope(child: JuvisApp()));
@@ -27,17 +34,12 @@ class _JuvisAppState extends ConsumerState<JuvisApp> {
 
   @override
   void initState() {
-    debugPrint("initSession START");
     super.initState();
 
     Future.microtask(() async {
       await ref.read(sessionProvider.notifier).initSession();
-      // 여기서 state 보고 라우팅
-      if (mounted) {
-        setState(() => _bootLoading = false);
-      }
+      if (mounted) setState(() => _bootLoading = false);
     });
-    debugPrint("initSession END");
   }
 
   @override
@@ -55,19 +57,17 @@ class _JuvisAppState extends ConsumerState<JuvisApp> {
       );
     }
 
-    // ✅ 세션 상태에 따라 시작 화면 결정
     Widget startPage;
     if (session == null) {
       startPage = LoginPage();
+    } else if (session.role == "BRANCH") {
+      startPage = const HomePage();
+    } else if (session.role == "HQ") {
+      startPage = kIsWeb ? const AdminPage() : const AdminAppPage();
+    } else if (session.role == "VENDOR") {
+      startPage = const VendorPage();
     } else {
-      if (session.role == "BRANCH") {
-        startPage = HomePage();
-      } else if (session.role == "HQ") {
-        startPage = kIsWeb ? AdminPage() : AdminAppPage();
-      } else {
-        // 혹시 모를 예외
-        startPage = LoginPage();
-      }
+      startPage = LoginPage();
     }
 
     return MaterialApp(
@@ -77,17 +77,20 @@ class _JuvisAppState extends ConsumerState<JuvisApp> {
         scaffoldBackgroundColor: const Color(0xFFF7F7F7),
       ),
 
-      // ✅ initialRoute 대신 home로 시작 화면 제어
-      home: startPage,
+      // ✅ 여기! observer 연결
+      navigatorObservers: [routeObserver],
 
-      // 기존 routes는 그대로 유지 (페이지 이동은 네 방식대로)
+      home: startPage,
       routes: {
-        "/login": (context) => LoginPage(),
-        "/home": (context) => HomePage(),
-        "/admin_web": (context) => AdminPage(),
-        "/admin_app": (context) => AdminAppPage(),
-        '/list': (_) => const ListPage(),
-        '/detail': (context) {
+        "/login": (_) => LoginPage(),
+        "/home": (_) => const HomePage(),
+        "/admin_web": (_) => const AdminPage(),
+        "/admin_app": (_) => const AdminAppPage(),
+        "/list": (_) => const ListPage(),
+        "/vendor": (_) => const VendorPage(),
+        "/vendor-list": (_) => const VendorListPage(),
+        "/notifications": (_) => const NotificationsPage(),
+        "/detail": (context) {
           final id = ModalRoute.of(context)!.settings.arguments as int;
           return MaintenanceDetailPage(maintenanceId: id);
         },
@@ -95,10 +98,7 @@ class _JuvisAppState extends ConsumerState<JuvisApp> {
       onGenerateRoute: (settings) {
         if (settings.name == '/maintenance-create') {
           final args = settings.arguments as Map<String, dynamic>;
-
           final category = args['category'] as MaintenanceCategory;
-          final homeHeader =
-              args['homeHeader'] as Widget?; // ✅ PreferredSizeWidget? ❌
           final bottomNav = args['bottomNav'] as Widget?;
 
           return MaterialPageRoute(
@@ -106,7 +106,6 @@ class _JuvisAppState extends ConsumerState<JuvisApp> {
                 MaintenanceCreatePage(category: category, bottomNav: bottomNav),
           );
         }
-
         return null;
       },
     );

@@ -135,6 +135,12 @@ class _CustomFormState extends ConsumerState<CustomForm> {
             arguments: {'name': name, 'userId': userId},
           );
         }
+      } else if (role == "VENDOR") {
+        Navigator.pushReplacementNamed(
+          context,
+          "/vendor",
+          arguments: {'name': name, 'userId': userId},
+        );
       } else {
         ScaffoldMessenger.of(
           context,

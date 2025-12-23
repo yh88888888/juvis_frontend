@@ -5,11 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:juvis_faciliry/_core/util/auth_request.dart';
 import 'package:juvis_faciliry/config/api_config.dart';
+import 'package:juvis_faciliry/pages/maintenance_detail_page.dart';
 
 class MaintenanceSimpleItem {
   final int id;
   final String? branchName;
   final String? requesterName;
+  final DateTime? workStartDate;
   final String title;
   final String status;
   final DateTime createdAt;
@@ -19,6 +21,7 @@ class MaintenanceSimpleItem {
     required this.id,
     required this.branchName,
     required this.requesterName,
+    required this.workStartDate,
     required this.title,
     required this.status,
     required this.createdAt,
@@ -32,6 +35,9 @@ class MaintenanceSimpleItem {
       requesterName: json['requesterName'] as String?,
       title: json['title'] as String? ?? '',
       status: json['status'] as String? ?? '',
+      workStartDate: json['workStartDate'] == null
+          ? null
+          : DateTime.parse(json['workStartDate'] as String),
       createdAt: DateTime.parse(json['createdAt'] as String),
       submittedAt: json['submittedAt'] == null
           ? null
@@ -152,55 +158,80 @@ class _LatestBoardSectionState extends ConsumerState<LatestBoardSection> {
                 onTap: () {
                   Navigator.pushNamed(
                     context,
-                    '/maintenance-detail',
+                    '/detail',
                     arguments: {'id': item.id},
                   );
                 },
                 child: Card(
                   margin: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 6,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              MaintenanceDetailPage(maintenanceId: item.id),
+                        ),
+                      );
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFE9EE),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Text(
+                                  '접수내용',
+                                  style: TextStyle(fontWeight: FontWeight.w700),
+                                ),
                               ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFFE9EE),
-                                borderRadius: BorderRadius.circular(10),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                // 👈 긴 제목 overflow 방지
+                                child: Text(
+                                  item.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.black87,
+                                  ),
+                                ),
                               ),
-                              child: const Text(
-                                '접수내용',
-                                style: TextStyle(fontWeight: FontWeight.w700),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              " ${item.title}",
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: Colors.black87,
-                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          _KvRow(
+                            title: "상태:",
+                            value: maintenanceStatusLabel(item.status),
+                          ),
+                          const SizedBox(height: 5),
+                          _KvRow(
+                            title: "제출일:",
+                            value: _fmtDateTime(item.submittedAt),
+                          ),
+                          if (item.status == 'IN_PROGRESS' &&
+                              item.workStartDate != null) ...[
+                            const SizedBox(height: 5),
+                            _KvRow(
+                              title: "방문예정일:",
+                              value: _fmtDateTime(item.workStartDate),
                             ),
                           ],
-                        ),
-                        const SizedBox(height: 12),
-                        _KvRow(title: "상태:", value: "${item.status}"),
-                        _KvRow(
-                          title: "제출일:",
-                          value: "${_fmtDateTime(item.submittedAt)}",
-                        ),
-                        // _KvRow(
-                        //   title: "방문예정일:",
-                        //   value: "${_fmtDateTime(item.workStartDate)}",
-                        // ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -248,6 +279,27 @@ class _LatestBoardSectionState extends ConsumerState<LatestBoardSection> {
         ),
       ],
     );
+  }
+}
+
+String maintenanceStatusLabel(String status) {
+  switch (status) {
+    case 'REQUESTED':
+      return '요청서 제출완료';
+    case 'ESTIMATING':
+      return '견적중';
+    case 'APPROVAL_PENDING':
+      return '견적 승인중';
+    case 'IN_PROGRESS':
+      return '작업중';
+    case 'COMPLETED':
+      return '작업 완료';
+    case 'REJECTED':
+      return '반려';
+    case 'DRAFT':
+      return '임시 저장';
+    default:
+      return status; // 혹시 모를 신규 상태 방어
   }
 }
 

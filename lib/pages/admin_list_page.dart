@@ -76,8 +76,8 @@ class _HqRequestListPageState extends ConsumerState<HqRequestListPage> {
                             branchName: it.branchName ?? '-',
                             title: it.title,
                             status: it.status,
-                            onTap: () {
-                              Navigator.push(
+                            onTap: () async {
+                              final changed = await Navigator.push<bool>(
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => MaintenanceDetailPage(
@@ -85,6 +85,20 @@ class _HqRequestListPageState extends ConsumerState<HqRequestListPage> {
                                   ),
                                 ),
                               );
+
+                              // ✅ 상세에서 변경이 있었다면:
+                              // 1) 현재 리스트도 최신화(선택)
+                              // 2) AdminAppPage까지 true를 전달해서 요약 갱신 트리거
+                              if (changed == true) {
+                                ref.invalidate(
+                                  hqRequestListProvider(q),
+                                ); // 리스트도 새로고침 (선택이지만 추천)
+                                if (!mounted) return;
+                                Navigator.pop(
+                                  context,
+                                  true,
+                                ); // 🔥 이게 핵심 (AdminAppPage로 전달)
+                              }
                             },
                           );
                         },
@@ -114,15 +128,11 @@ class _HqRequestListPageState extends ConsumerState<HqRequestListPage> {
               child: Row(
                 children: [
                   _chip(
-                    '전체',
-                    isOn: q.status == null,
-                    onTap: () => _setStatus(null),
-                  ),
-                  _chip(
                     '지점요청',
                     isOn: q.status == 'REQUESTED',
                     onTap: () => _setStatus('REQUESTED'),
                   ),
+
                   _chip(
                     '견적대기',
                     isOn: q.status == 'ESTIMATING',
@@ -286,6 +296,7 @@ class _HqRequestListPageState extends ConsumerState<HqRequestListPage> {
   // 타이틀
   // --------------------------
   String _titleForStatus(String? status) {
+    // 기존 HQ 로직
     switch ((status ?? '').toUpperCase()) {
       case 'REQUESTED':
         return '지점 요청(결재 대기)';

@@ -1,8 +1,7 @@
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:juvis_faciliry/_core/util/auth_request.dart';
+import 'package:juvis_faciliry/_core/util/resp.dart';
 import 'package:juvis_faciliry/config/api_config.dart';
 
 class AdminDashboardApi {
@@ -14,7 +13,7 @@ class AdminDashboardApi {
       return http.get(
         uri,
         headers: {
-          'Authorization': '$accessToken',
+          'Authorization': accessToken, // ✅ 그대로
           'Content-Type': 'application/json',
         },
       );
@@ -53,6 +52,14 @@ class AdminSummary {
     );
   }
 
-  static AdminSummary fromBody(String body) =>
-      AdminSummary.fromJson(jsonDecode(body) as Map<String, dynamic>);
+  /// ✅ Resp 래핑 기준 파서 (방법2)
+  static AdminSummary fromRespBody(String bodyStr) {
+    final wrapper = Resp.fromBody(bodyStr);
+    if (!wrapper.ok || wrapper.body == null || wrapper.body is! Map) {
+      throw Exception('Invalid summary response: $bodyStr');
+    }
+
+    final map = Map<String, dynamic>.from(wrapper.body as Map);
+    return AdminSummary.fromJson(map);
+  }
 }

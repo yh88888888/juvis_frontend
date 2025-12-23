@@ -5,41 +5,58 @@ import 'package:juvis_faciliry/components/home_components/home_bottom_nav.dart';
 import 'package:juvis_faciliry/components/home_components/home_header.dart';
 import 'package:juvis_faciliry/components/home_components/latest_board_section.dart';
 import 'package:juvis_faciliry/components/home_components/quick_actions_section.dart';
+import 'package:juvis_faciliry/components/notification/notification_notifier.dart';
 
-class HomePage extends ConsumerWidget {
+class HomePage extends ConsumerStatefulWidget {
   static const softPink = Color(0xFFFFD1DC);
   static const softPinkBg = Color(0xFFFFE9EE);
-
-  // static const blueBtn = Color(0xFFFFFEF6);
   static const blueBtn = Color(0xFF2E66FF);
 
   const HomePage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final sessionUser = ref.watch(sessionProvider);
-    // 세션이 없으면(로그아웃/토큰만료 등) 로그인 화면으로 보내거나 로딩 처리
+  ConsumerState<HomePage> createState() => _HomePageState();
+}
 
+class _HomePageState extends ConsumerState<HomePage> {
+  @override
+  void initState() {
+    super.initState();
+
+    // ✅ 홈 진입 시 알림 뱃지 갱신 (1회)
+    Future.microtask(() {
+      ref.read(notificationProvider.notifier).refreshUnreadCount();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sessionUser = ref.watch(sessionProvider);
+
+    // ✅ 세션 없으면 로그인으로 이동 (build 중 직접 push 금지)
     if (sessionUser == null) {
-      // main에서 session==null이면 LoginPage로 가게 되어있으면
-      // 여기선 로딩만 보여줘도 충분함
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+      });
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     final String name = sessionUser.name ?? '본사';
 
     return Scaffold(
+      backgroundColor: HomePage.softPinkBg,
       bottomNavigationBar: const HomeBottomNav(),
       body: Theme(
         data: Theme.of(context).copyWith(
           colorScheme: Theme.of(context).colorScheme.copyWith(
-            primary: softPink,
-            secondary: softPink,
+            primary: HomePage.softPink,
+            secondary: HomePage.softPink,
             surface: Colors.white,
           ),
           textButtonTheme: TextButtonThemeData(
             style: TextButton.styleFrom(
-              backgroundColor: blueBtn,
+              backgroundColor: HomePage.blueBtn,
               foregroundColor: Colors.white,
               minimumSize: const Size(340, 52),
               shape: RoundedRectangleBorder(
@@ -50,7 +67,7 @@ class HomePage extends ConsumerWidget {
           cardTheme: const CardThemeData(
             color: Colors.white,
             surfaceTintColor: Colors.transparent,
-            elevation: 0.0,
+            elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.all(Radius.circular(16)),
             ),
@@ -60,28 +77,33 @@ class HomePage extends ConsumerWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
             children: [
+              // 🔹 상단 헤더
               HomeHeader(name: name),
+
               const SizedBox(height: 40),
 
-              const SizedBox(
-                height: 200, // ✅ 너 카드 실제 높이에 맞춰 조절 (예: 160~200)
-                child: LatestBoardSection(),
-              ),
+              // 🔹 최신 현황 카드
+              const SizedBox(height: 200, child: LatestBoardSection()),
 
               const SizedBox(height: 18),
+
+              // 🔹 전체 목록 버튼
               SizedBox(
                 width: double.infinity,
                 child: TextButton(
                   onPressed: () {
-                    Navigator.pushNamed(
-                      context,
-                      '/list', // 새로 만들 목록 페이지 라우트
-                    );
+                    Navigator.pushNamed(context, '/list');
                   },
-                  child: const Text('전체 목록 보기'),
+                  child: const Text(
+                    '요청서 전체보기',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
                 ),
               ),
+
               const SizedBox(height: 18),
+
+              // 🔹 빠른 액션
               const QuickActionsSection(),
             ],
           ),

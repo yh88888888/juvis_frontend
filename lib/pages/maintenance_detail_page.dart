@@ -9,23 +9,42 @@ import 'package:juvis_faciliry/components/detail_components/maintenance_detail_a
 import 'package:juvis_faciliry/components/detail_components/maintenance_detail_item.dart';
 import 'package:juvis_faciliry/components/detail_photo_components/attachment_preview.dart';
 
-class MaintenanceDetailPage extends ConsumerWidget {
+class MaintenanceDetailPage extends ConsumerStatefulWidget {
   final int maintenanceId;
 
   const MaintenanceDetailPage({super.key, required this.maintenanceId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MaintenanceDetailPage> createState() =>
+      _MaintenanceDetailPageState();
+}
+
+class _MaintenanceDetailPageState extends ConsumerState<MaintenanceDetailPage> {
+  // ✅ Vendor 견적 제출 중복 방지용 상태
+  bool _submittingEstimate = false;
+
+  @override
+  Widget build(BuildContext context) {
     final session = ref.watch(sessionProvider);
     final role = _resolveRole(session?.role);
 
     final asyncDetail = ref.watch(
-      maintenanceDetailProvider((id: maintenanceId, role: role)),
+      maintenanceDetailProvider((id: widget.maintenanceId, role: role)),
     );
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('상세내용'),
+        title: Text.rich(
+          TextSpan(
+            text: '상세 내용',
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFFFF9EB5),
+              height: 1.3,
+            ),
+          ),
+        ),
         centerTitle: true,
         leadingWidth: 90,
         leading: InkWell(
@@ -49,12 +68,18 @@ class MaintenanceDetailPage extends ConsumerWidget {
         error: (e, _) => Center(child: Text('상세 불러오기 실패: $e')),
         data: (d) {
           final status = _normStatus(d.status);
-
+          if (role == AppRole.vendor &&
+              (status == 'DRAFT' || status == 'REQUESTED')) {
+            return const Center(
+              child: Text('아직 견적 단계가 아닙니다.', style: TextStyle(fontSize: 16)),
+            );
+          }
           final children = <Widget>[
             const SizedBox(height: 12),
             _roleBanner(role),
             const SizedBox(height: 12),
-
+            _workflowHintCard(),
+            const SizedBox(height: 12),
             _topSummaryCard(d),
             const SizedBox(height: 12),
 
@@ -62,6 +87,13 @@ class MaintenanceDetailPage extends ConsumerWidget {
             if (_shouldShowHq1Card(status)) ...[
               _hq1ReviewCard(role, d),
               const SizedBox(height: 12),
+              if (role == AppRole.vendor && status == 'ESTIMATING') ...[
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed: () => _openVendorEstimateDialog(context, d.id),
+                  child: const Text('견적 / 작업일 입력'),
+                ),
+              ],
             ],
 
             // 2) Vendor 카드
@@ -74,6 +106,19 @@ class MaintenanceDetailPage extends ConsumerWidget {
             if (_shouldShowHq2Card(status)) ...[
               _hq2ReviewCard(role, d),
               const SizedBox(height: 12),
+              if (role == AppRole.vendor && status == 'IN_PROGRESS') ...[
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pushNamed(
+                      context,
+                      '/vendor-work-complete',
+                      arguments: d.id,
+                    );
+                  },
+                  child: const Text('작업 결과 제출'),
+                ),
+              ],
             ],
 
             // 4) 완료
@@ -181,6 +226,115 @@ class MaintenanceDetailPage extends ConsumerWidget {
     );
   }
 
+  static Widget _workflowHintCard() {
+    return _sectionCard(
+      title: '<진행 순서 안내>',
+      children: const [
+        Text('• 지점: 요청서 저장 → 제출'),
+        SizedBox(height: 6),
+        Text('• 본사: 승인 or 코멘트 입력하여 반려'),
+        SizedBox(height: 6),
+        Text('• (본사 → 지점승인) 관리업체: 견적가/작업가능일 제출'),
+        SizedBox(height: 6),
+        Text('• 본사: 견적 승인 - 지점: 작업가능일/관리업체 연락처 확인'),
+        SizedBox(height: 6),
+        Text('• (본사 → 견적승인) 관리업체: 완료사진 + 완료일 제출'),
+        SizedBox(height: 6),
+        Text('• (본사 → 견적반려) 관리업체: 재견적 1회 가능'),
+      ],
+    );
+  }
+
+  Future<void> _openVendorEstimateDialog(
+    BuildContext context,
+    int requestId,
+  ) async {
+    final amountCtrl = TextEditingController();
+    final commentCtrl = TextEditingController();
+    DateTime? startDate;
+    DateTime? endDate;
+
+    await showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('견적 / 작업일 입력'),
+        content: SingleChildScrollView(
+          child: Column(
+            children: [
+              TextField(
+                controller: amountCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: '견적 금액'),
+              ),
+              TextField(
+                controller: commentCtrl,
+                decoration: const InputDecoration(labelText: '견적 코멘트'),
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: () async {
+                  startDate = await showDatePicker(
+                    context: context,
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime(2100),
+                    initialDate: DateTime.now(),
+                  );
+                },
+                child: const Text('작업 시작 예정일'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  if (_submittingEstimate) return;
+                  setState(() => _submittingEstimate = true);
+
+                  try {
+                    await MaintenanceDetailApi.submitEstimate(
+                      id: requestId,
+                      estimateAmount: amountCtrl.text,
+                      estimateComment: commentCtrl.text,
+                      workStartDate: startDate,
+                      workEndDate: endDate,
+                    );
+                    final session = ref.read(sessionProvider);
+                    final role = _resolveRole(session?.role);
+                    ref.invalidate(
+                      maintenanceDetailProvider((id: requestId, role: role)),
+                    );
+                    Navigator.pop(context); // 팝업 닫기
+                  } finally {
+                    if (mounted) {
+                      setState(() => _submittingEstimate = false);
+                    }
+                  }
+                },
+                child: const Text('작업 종료 예정일'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await MaintenanceDetailApi.submitEstimate(
+                id: requestId,
+                estimateAmount: amountCtrl.text,
+                estimateComment: commentCtrl.text,
+                workStartDate: startDate,
+                workEndDate: endDate,
+              );
+              Navigator.pop(context);
+            },
+            child: const Text('제출'),
+          ),
+        ],
+      ),
+    );
+  }
+
   static Future<void> _onHqApproveRequest(
     BuildContext context,
     WidgetRef ref,
@@ -192,6 +346,7 @@ class MaintenanceDetailPage extends ConsumerWidget {
 
       if (res.statusCode == 200) {
         _snack(context, '승인 완료');
+        Navigator.pop(context, true);
         _refreshDetail(ref, id, role);
         return;
       }
@@ -203,7 +358,8 @@ class MaintenanceDetailPage extends ConsumerWidget {
       );
 
       if (ok) {
-        _snack(context, '승인 완료 (재확인됨)');
+        _snack(context, '승인 완료');
+        Navigator.pop(context, true);
         _refreshDetail(ref, id, role);
       } else {
         _snack(context, '승인 실패: ${res.statusCode}');
@@ -217,6 +373,7 @@ class MaintenanceDetailPage extends ConsumerWidget {
 
       if (ok) {
         _snack(context, '승인 완료 (재확인됨)');
+        Navigator.pop(context, true);
         _refreshDetail(ref, id, role);
       } else {
         _snack(context, '승인 실패: $e');
@@ -235,6 +392,7 @@ class MaintenanceDetailPage extends ConsumerWidget {
 
       if (res.statusCode == 200) {
         _snack(context, '승인 완료');
+        Navigator.pop(context, true);
         _refreshDetail(ref, id, role);
         return;
       }
@@ -247,6 +405,7 @@ class MaintenanceDetailPage extends ConsumerWidget {
 
       if (ok) {
         _snack(context, '승인 완료 (재확인됨)');
+        Navigator.pop(context, true);
         _refreshDetail(ref, id, role);
       } else {
         _snack(context, '승인 실패: ${res.statusCode}');
@@ -260,6 +419,7 @@ class MaintenanceDetailPage extends ConsumerWidget {
 
       if (ok) {
         _snack(context, '승인 완료 (재확인됨)');
+        Navigator.pop(context, true);
         _refreshDetail(ref, id, role);
       } else {
         _snack(context, '승인 실패: $e');
@@ -504,8 +664,10 @@ class MaintenanceDetailPage extends ConsumerWidget {
         (status == 'HQ1_REJECTED' && reason.isNotEmpty);
 
     return _sectionCard(
-      title: '1) HQ 1차검토',
+      title: '본사 요청서 검토',
       children: [
+        const Divider(height: 2, thickness: 1, color: Colors.blueGrey),
+        const SizedBox(height: 6),
         _kv('1차 검토 결과', result),
         if (showRejectReason) _kv('반려 사유', reason, labelColor: Colors.red),
 
@@ -515,9 +677,9 @@ class MaintenanceDetailPage extends ConsumerWidget {
 
         const SizedBox(height: 6),
         if (role == AppRole.hq)
-          _info('1차 검토는 REQUESTED 상태에서 결정됩니다.')
+          _info('요청서 제출에 대한 검토.')
         else
-          _info('HQ 1차 검토 이력입니다.'),
+          _info('지점요청서 검토 사항입니다.'),
       ],
     );
   }
@@ -525,36 +687,40 @@ class MaintenanceDetailPage extends ConsumerWidget {
   // 2) Vendor 견적 카드: 반려사유는 3번 카드로 이동(요구사항)
   static Widget _vendorEstimateCard(AppRole role, MaintenanceDetailItem d) {
     return _sectionCard(
-      title: '2) Vendor 견적 / 작업 가능일 제출',
+      title: '견적 / 작업 정보',
       children: [
-        if (role == AppRole.vendor) ...[
-          _warning('재견적은 1회만 허용됩니다.'),
-          _kv('재제출 횟수', '${d.estimateResubmitCount}'),
-        ] else
-          _info('Vendor 제출 내용을 HQ가 검토합니다.'),
-
+        const Divider(height: 2, thickness: 1, color: Colors.blueGrey),
+        const SizedBox(height: 6),
         _kv('업체명', d.vendorName),
         _kv('업체 연락처', d.vendorPhone),
-        const Divider(height: 22),
+        const Divider(height: 15),
 
         _kv(
           '견적 금액',
           d.estimateAmount == null ? null : '${_fmtMoney(d.estimateAmount!)} 원',
         ),
         _kv('견적 코멘트', d.estimateComment),
-        const Divider(height: 22),
+        const Divider(height: 15),
 
         _kv(
-          '작업 시작일',
+          '작업 시작예정일',
           d.workStartDate == null ? null : _fmtDate(d.workStartDate!),
         ),
-        _kv('작업 종료일', d.workEndDate == null ? null : _fmtDate(d.workEndDate!)),
         _kv(
-          'Vendor 제출일',
+          '작업 종료예정일',
+          d.workEndDate == null ? null : _fmtDate(d.workEndDate!),
+        ),
+        _kv(
+          '업체 견적 제출일',
           d.vendorSubmittedAt == null
               ? null
               : _fmtDateTime(d.vendorSubmittedAt!),
         ),
+        if (role == AppRole.vendor) ...[
+          _warning('재견적은 1회만 허용됩니다.'),
+          _kv('재제출 횟수', '${d.estimateResubmitCount}'),
+        ] else
+          _info('업체 제출내용은 본사에서 검토합니다.'),
       ],
     );
   }
@@ -576,8 +742,10 @@ class MaintenanceDetailPage extends ConsumerWidget {
         (status == 'HQ2_REJECTED' && reason.isNotEmpty);
 
     return _sectionCard(
-      title: '3) HQ 2차검토',
+      title: '본사 견적 검토',
       children: [
+        const Divider(height: 2, thickness: 1, color: Colors.blueGrey),
+        const SizedBox(height: 6),
         _kv('2차 검토 결과', result),
         if (showRejectReason) _kv('반려 사유', reason, labelColor: Colors.red),
 
@@ -589,15 +757,17 @@ class MaintenanceDetailPage extends ConsumerWidget {
         if (role == AppRole.hq)
           _info('2차 검토는 APPROVAL_PENDING 상태에서 결정됩니다.')
         else
-          _info('HQ 2차 검토 이력입니다.'),
+          _info('견적 검토 사항입니다.'),
       ],
     );
   }
 
   static Widget _completedCard(AppRole role, MaintenanceDetailItem d) {
     return _sectionCard(
-      title: '4) 작업 완료',
+      title: '작업 결과',
       children: [
+        const Divider(height: 2, thickness: 1, color: Colors.blueGrey),
+        const SizedBox(height: 6),
         _kv('작업 완료일', _fmtNullableDateTime(d.workCompletedAt)),
         const SizedBox(height: 10),
         if ((d.resultPhotoUrl ?? '').isNotEmpty)
@@ -637,22 +807,24 @@ class MaintenanceDetailPage extends ConsumerWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                _MetaChip(label: d.status, icon: Icons.info_outline),
+                _MetaChip(
+                  label: "[" + maintenanceStatusLabel(d.status) + "]",
+                  icon: Icons.priority_high,
+                ),
                 _MetaChip(label: d.categoryName, icon: Icons.category_outlined),
                 if (d.createdAt != null)
                   _MetaChip(
                     label: _fmtDateTime(d.createdAt!),
-                    icon: Icons.calendar_today_outlined,
+                    icon: Icons.schedule_outlined,
                   ),
               ],
             ),
             const SizedBox(height: 12),
+            const Divider(height: 22, thickness: 1, color: Colors.orange),
             _kv('지점', d.branchName),
             _kv('주소', d.branchAddress),
-            const Divider(height: 22),
-            _kv('요청자', d.requesterName),
             _kv('연락처', d.requesterPhone),
-            const Divider(height: 22),
+            const Divider(height: 22, thickness: 1, color: Colors.orange),
             _kv('설명', d.description),
             const SizedBox(height: 10),
             const Text(
@@ -1132,6 +1304,27 @@ class _CompleteDialogState extends State<_CompleteDialog> {
         ),
       ],
     );
+  }
+}
+
+String maintenanceStatusLabel(String status) {
+  switch (status) {
+    case 'REQUESTED':
+      return '요청서 제출완료';
+    case 'ESTIMATING':
+      return '견적중';
+    case 'APPROVAL_PENDING':
+      return '견적 승인중';
+    case 'IN_PROGRESS':
+      return '작업중';
+    case 'COMPLETED':
+      return '작업 완료';
+    case 'REJECTED':
+      return '반려';
+    case 'DRAFT':
+      return '임시 저장';
+    default:
+      return status; // 혹시 모를 신규 상태 방어
   }
 }
 

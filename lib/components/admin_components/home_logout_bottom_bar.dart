@@ -1,13 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:juvis_faciliry/_core/session/session_provider.dart';
+import 'package:juvis_faciliry/components/notification/notification_notifier.dart'; // ✅ 추가
 import 'package:juvis_faciliry/pages/login_page.dart';
 
-class HomeLogoutBottomBar extends ConsumerWidget {
+class HomeLogoutBottomBar extends ConsumerStatefulWidget {
   const HomeLogoutBottomBar({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeLogoutBottomBar> createState() =>
+      _HomeLogoutBottomBarState();
+}
+
+class _HomeLogoutBottomBarState extends ConsumerState<HomeLogoutBottomBar> {
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() async {
+      await ref.read(notificationProvider.notifier).refreshUnreadCount();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final unread = ref.watch(unreadCountProvider); // ✅ 뱃지 숫자 연동
+
     return SafeArea(
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
@@ -45,6 +62,41 @@ class HomeLogoutBottomBar extends ConsumerWidget {
                     '/admin_app',
                     (route) => false,
                   );
+                },
+              ),
+            ),
+
+            const SizedBox(width: 12),
+
+            // =====================
+            // 알림 버튼 (뱃지)
+            // =====================
+            Expanded(
+              child: OutlinedButton.icon(
+                icon: Badge(
+                  isLabelVisible: unread > 0,
+                  label: Text('$unread'),
+                  child: const Icon(Icons.notifications_outlined),
+                ),
+                label: const Text(
+                  '알림',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: () async {
+                  // ✅ 알림 진입 시 최신 unread 당겨오기 (지점쪽과 동일)
+                  await ref
+                      .read(notificationProvider.notifier)
+                      .refreshUnreadCount();
+
+                  if (!context.mounted) return;
+
+                  Navigator.pushNamed(context, '/notifications');
                 },
               ),
             ),
@@ -98,10 +150,14 @@ class HomeLogoutBottomBar extends ConsumerWidget {
 
     if (confirmed != true) return;
 
+    // ✅ 알림 상태도 같이 초기화(지점쪽과 동일한 처리)
+    ref.read(notificationProvider.notifier).clear();
+
     // ✅ 세션 제거
     await ref.read(sessionProvider.notifier).logout();
 
     // ✅ 로그인 페이지로 완전 이동
+    if (!context.mounted) return;
     Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginPage()),
       (_) => false,
