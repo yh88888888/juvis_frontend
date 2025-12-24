@@ -24,6 +24,19 @@ class MaintenanceDetailApi {
     return res;
   }
 
+  static Future<http.Response> branchSubmit({required int id}) {
+    final uri = Uri.parse('$apiBase/api/branch/maintenances/$id/submit');
+    return authRequest((accessToken) {
+      return http.post(
+        uri,
+        headers: {
+          'Authorization': accessToken,
+          'Content-Type': 'application/json',
+        },
+      );
+    });
+  }
+
   static Future<http.Response> fetchHqDetail(int id) async {
     final uri = Uri.parse('$apiBase/api/hq/maintenance/requests/$id');
     return authRequest((accessToken) {

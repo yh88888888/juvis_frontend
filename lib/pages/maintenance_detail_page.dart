@@ -103,23 +103,7 @@ class _MaintenanceDetailPageState extends ConsumerState<MaintenanceDetailPage> {
             ],
 
             // 3) HQ 2차검토
-            if (_shouldShowHq2Card(status)) ...[
-              _hq2ReviewCard(role, d),
-              const SizedBox(height: 12),
-              if (role == AppRole.vendor && status == 'IN_PROGRESS') ...[
-                const SizedBox(height: 12),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.pushNamed(
-                      context,
-                      '/vendor-work-complete',
-                      arguments: d.id,
-                    );
-                  },
-                  child: const Text('작업 결과 제출'),
-                ),
-              ],
-            ],
+,
 
             // 4) 완료
             if (_shouldShowCompletedCard(status)) ...[
@@ -201,7 +185,13 @@ class _MaintenanceDetailPageState extends ConsumerState<MaintenanceDetailPage> {
         onPressed: () => _onCompleteWork(context, ref, role, d.id),
       );
     }
-
+    // Branch: DRAFT -> 제출
+    if (role == AppRole.branch && status == 'DRAFT') {
+      return _oneButton(
+        text: '제출',
+        onPressed: () => _onBranchSubmit(context, ref, role, d.id),
+      );
+    }
     // Branch: HQ1_REJECTED -> 다시 제출
     if (role == AppRole.branch && status == 'HQ1_REJECTED') {
       return _oneButton(
@@ -604,6 +594,50 @@ class _MaintenanceDetailPageState extends ConsumerState<MaintenanceDetailPage> {
       _refreshDetail(ref, id, role);
     } else {
       _snack(context, '재제출 실패: ${res.statusCode}');
+    }
+  }
+
+  static Future<void> _onBranchSubmit(
+    BuildContext context,
+    WidgetRef ref,
+    AppRole role,
+    int id,
+  ) async {
+    try {
+      final res = await MaintenanceDetailApi.branchSubmit(id: id);
+
+      if (res.statusCode == 200) {
+        _snack(context, '제출 완료');
+        _refreshDetail(ref, id, role); // ✅ 상태만 DRAFT -> REQUESTED로 갱신
+        return;
+      }
+
+      // 혹시 서버가 500을 내도 실제로는 상태가 바뀌는 케이스 방어(너 코드 패턴 유지)
+      final ok = await _confirmStatusByRefetch(
+        id: id,
+        role: role,
+        expectedStatus: 'REQUESTED',
+      );
+
+      if (ok) {
+        _snack(context, '제출 완료 (재확인됨)');
+        _refreshDetail(ref, id, role);
+      } else {
+        _snack(context, '제출 실패: ${res.statusCode}');
+      }
+    } catch (e) {
+      final ok = await _confirmStatusByRefetch(
+        id: id,
+        role: role,
+        expectedStatus: 'REQUESTED',
+      );
+
+      if (ok) {
+        _snack(context, '제출 완료 (재확인됨)');
+        _refreshDetail(ref, id, role);
+      } else {
+        _snack(context, '제출 실패: $e');
+      }
     }
   }
 
@@ -1428,7 +1462,6 @@ Future<bool> _confirmStatusByRefetch({
 
     return detail.status == expectedStatus;
   } catch (e) {
-    debugPrint('confirmStatusByRefetch error: $e');
     return false;
   }
 }

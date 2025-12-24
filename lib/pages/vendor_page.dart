@@ -17,6 +17,7 @@ class VendorPage extends ConsumerWidget {
         session?.name ??
         (session?.id != null ? 'ID: ${session!.id}' : '업체 계정');
 
+    // ✅ 이 watch가 있어야 summary api가 실제로 호출됨
     final asyncSummary = ref.watch(vendorSummaryProvider);
 
     return Scaffold(
@@ -68,6 +69,9 @@ class VendorPage extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('요약 불러오기 실패: $e')),
         data: (s) {
+          debugPrint(
+            'VENDOR SUMMARY estimating=${s.estimating}, inProgress=${s.inProgress}, completed=${s.completed}',
+          );
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -102,8 +106,7 @@ class VendorPage extends ConsumerWidget {
                 children: [
                   Expanded(
                     child: _SummaryCard(
-                      title: '견적 제출 필요',
-                      // AdminAppPage에서 "견적 대기"가 s.estimating 사용 :contentReference[oaicite:1]{index=1}
+                      title: '견적 제출 필요\n ',
                       count: s.estimating,
                       onTap: () => _goList(context, 'ESTIMATING'),
                     ),
@@ -111,17 +114,15 @@ class VendorPage extends ConsumerWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: _SummaryCard(
-                      title: '작업 중(결과제출 필요)',
+                      title: '작업 중\n(결과제출 필요)',
                       count: s.inProgress,
-                      // ✅ 요구: "작업 중 카드도 누르면 같은곳으로 가야"
-                      // → 같은 리스트로 이동(필터만 IN_PROGRESS)
                       onTap: () => _goList(context, 'IN_PROGRESS'),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: _SummaryCard(
-                      title: '작업 완료',
+                      title: '작업 완료\n ',
                       count: s.completed,
                       onTap: () => _goList(context, 'COMPLETED'),
                     ),
@@ -192,7 +193,11 @@ class VendorPage extends ConsumerWidget {
   }
 
   void _goList(BuildContext context, String? status) {
-    Navigator.pushNamed(context, '/vendor-list');
+    Navigator.pushNamed(
+      context,
+      '/vendor-list',
+      arguments: status, // ✅ null이면 전체
+    );
   }
 }
 

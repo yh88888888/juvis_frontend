@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:juvis_faciliry/components/vendor_components/vendor_summary.dart';
 import 'package:juvis_faciliry/components/vendor_components/vendor_summary_api.dart';
 
-import '../admin_components/admin_list_models.dart';
+import '../../_core/util/resp.dart';
 
 final vendorSummaryProvider = FutureProvider.autoDispose<VendorSummary>((
   ref,

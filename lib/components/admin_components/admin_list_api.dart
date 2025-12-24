@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:juvis_faciliry/_core/util/auth_request.dart';
 import 'package:juvis_faciliry/config/api_config.dart';
@@ -24,8 +23,6 @@ class HqRequestsApi {
       '$apiBase/hq/maintenance/requests',
     ).replace(queryParameters: qp);
 
-    debugPrint('HQ LIST url=$uri');
-
     final res = await authRequest((accessToken) {
       return http.get(
         uri,
@@ -36,7 +33,6 @@ class HqRequestsApi {
       );
     });
 
-    debugPrint('HQ LIST status=${res.statusCode}');
     // debugPrint('HQ LIST body=${res.body}'); // 길면 주석
     return res;
   }

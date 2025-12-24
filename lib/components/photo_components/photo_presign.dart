@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:juvis_faciliry/_core/util/auth_request.dart';
 import 'package:juvis_faciliry/components/photo_components/photo_models.dart';
@@ -35,10 +34,8 @@ class UploadApi {
     if (res.statusCode != 200) {
       throw Exception('presign 실패 (status: ${res.statusCode})');
     }
-    debugPrint('presign raw=${res.body}');
 
     final map = jsonDecode(res.body);
-    debugPrint('presign decoded=$map');
 
     // 네 Resp wrapper면 map['body']로 바꿔야 함
     // 케이스1) { body: { uploadUrl... } }
@@ -65,9 +62,7 @@ class UploadApi {
       body: bytes,
     );
 
-    debugPrint('S3 PUT status=${res.statusCode}');
     if (res.statusCode != 200 && res.statusCode != 204) {
-      debugPrint('S3 PUT body=${res.body}');
       throw Exception('S3 업로드 실패 (status: ${res.statusCode})');
     }
   }

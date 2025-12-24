@@ -119,7 +119,6 @@ class _MaintenanceCreatePageState extends State<MaintenanceCreatePage> {
       if (!mounted) return;
 
       if (res.statusCode != 200) {
-        debugPrint('SAVE fail status=${res.statusCode}, body=${res.body}');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('저장 실패 (status: ${res.statusCode})')),
         );
@@ -164,9 +163,6 @@ class _MaintenanceCreatePageState extends State<MaintenanceCreatePage> {
     setState(() => _loading = true);
 
     try {
-      debugPrint(
-        "SUBMIT id=$_maintenanceId saved=$_saved locked=$_locked submitted=$_submitted",
-      );
       final res = await MaintenanceApi.submit(_maintenanceId!);
 
       if (!mounted) return;
@@ -192,7 +188,6 @@ class _MaintenanceCreatePageState extends State<MaintenanceCreatePage> {
           context,
         ).pushNamedAndRemoveUntil('/list', (route) => false);
       } else {
-        debugPrint('SUBMIT fail status=${res.statusCode}, body=${res.body}');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('제출 실패 (status: ${res.statusCode})')),
         );

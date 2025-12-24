@@ -111,8 +111,14 @@ class _ListBody extends ConsumerWidget {
             return Card(
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
-                onTap: () {
-                  Navigator.pushNamed(context, '/detail', arguments: it.id);
+                onTap: () async {
+                  await Navigator.pushNamed(
+                    context,
+                    '/detail',
+                    arguments: it.id,
+                  );
+                  // ✅ 상세에서 제출(DRAFT->REQUESTED)하고 돌아오면 목록 갱신
+                  ref.invalidate(maintenanceListProvider);
                 },
                 child: Padding(
                   padding: const EdgeInsets.all(14),
@@ -131,7 +137,10 @@ class _ListBody extends ConsumerWidget {
                       const SizedBox(height: 10),
                       Row(
                         children: [
-                          _MetaChip(label: it.status, icon: Icons.info_outline),
+                          _MetaChip(
+                            label: statusToKorean(it.status),
+                            icon: Icons.info_outline,
+                          ),
                           const SizedBox(width: 8),
                           _MetaChip(
                             label: _fmtDate(it.createdAt),
@@ -184,5 +193,30 @@ class _MetaChip extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+String statusToKorean(String status) {
+  switch (status) {
+    case 'DRAFT':
+      return '임시저장';
+    case 'REQUESTED':
+      return '요청됨';
+    case 'ESTIMATING':
+      return '업체견적중';
+    case 'SUBMITTED':
+      return '제출됨';
+    case 'APPROVED':
+      return '승인됨';
+    case 'REJECTED':
+      return '반려됨';
+    case 'IN_PROGRESS':
+      return '진행중';
+    case 'COMPLETED':
+      return '완료';
+    case 'CANCELLED':
+      return '취소';
+    default:
+      return status; // 혹시 모를 예외
   }
 }

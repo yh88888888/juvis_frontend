@@ -25,40 +25,35 @@ class Resp<T> {
 class VendorListItem {
   final int id;
   final String title;
-  final String status;
-
-  final String? category;
+  final String status; // enum 문자열
   final String? branchName;
-  final DateTime? createdAt;
-  final DateTime? submittedAt;
-
-  // 필요하면 더 추가 가능 (estimateAmount 등)
-  final String? estimateAmount;
+  final String? requesterName;
+  final DateTime createdAt;
 
   VendorListItem({
     required this.id,
     required this.title,
     required this.status,
-    this.category,
+    required this.createdAt,
     this.branchName,
-    this.createdAt,
-    this.submittedAt,
-    this.estimateAmount,
+    this.requesterName,
   });
 
-  static DateTime? _dt(dynamic v) =>
-      v == null ? null : DateTime.tryParse(v.toString());
-
   factory VendorListItem.fromJson(Map<String, dynamic> json) {
+    DateTime parseDt(dynamic v) {
+      if (v == null) return DateTime.fromMillisecondsSinceEpoch(0);
+      if (v is String)
+        return DateTime.tryParse(v) ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return DateTime.fromMillisecondsSinceEpoch(0);
+    }
+
     return VendorListItem(
-      id: (json['id'] as num?)?.toInt() ?? 0,
-      title: (json['title'] ?? '').toString(),
-      status: (json['status'] ?? '').toString(),
-      category: json['category']?.toString(),
-      branchName: json['branchName']?.toString(),
-      createdAt: _dt(json['createdAt']),
-      submittedAt: _dt(json['submittedAt']),
-      estimateAmount: json['estimateAmount']?.toString(),
+      id: (json['id'] as num).toInt(),
+      title: (json['title'] ?? '') as String,
+      status: (json['status'] ?? '') as String,
+      branchName: json['branchName'] as String?,
+      requesterName: json['requesterName'] as String?,
+      createdAt: parseDt(json['createdAt']),
     );
   }
 }

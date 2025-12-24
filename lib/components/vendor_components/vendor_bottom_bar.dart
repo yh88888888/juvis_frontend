@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:juvis_faciliry/_core/session/session_provider.dart';
+import 'package:juvis_faciliry/components/notification/notification_notifier.dart';
 import 'package:juvis_faciliry/pages/login_page.dart';
 
 class VendorBottomBar extends ConsumerStatefulWidget {
@@ -11,7 +12,125 @@ class VendorBottomBar extends ConsumerStatefulWidget {
 }
 
 class _VendorBottomBarState extends ConsumerState<VendorBottomBar> {
-  int _selectedIndex = 0;
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() async {
+      // ✅ 벤더 알림 unread count 갱신
+      await ref.read(notificationProvider.notifier).refreshUnreadCount();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final unread = ref.watch(unreadCountProvider);
+
+    return SafeArea(
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 10,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            // =====================
+            // 홈
+            // =====================
+            Expanded(
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.home_outlined),
+                label: const Text(
+                  '홈',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: () {
+                  Navigator.pushNamedAndRemoveUntil(
+                    context,
+                    '/vendor',
+                    (route) => false,
+                  );
+                },
+              ),
+            ),
+
+            const SizedBox(width: 12),
+
+            // =====================
+            // 알림 (뱃지)
+            // =====================
+            Expanded(
+              child: OutlinedButton.icon(
+                icon: Badge(
+                  isLabelVisible: unread > 0,
+                  label: Text('$unread'),
+                  child: const Icon(Icons.notifications_outlined),
+                ),
+                label: const Text(
+                  '알림',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: () async {
+                  await ref
+                      .read(notificationProvider.notifier)
+                      .refreshUnreadCount();
+                  if (!context.mounted) return;
+
+                  // ✅ 벤더 알림 페이지
+                  Navigator.pushNamed(context, '/notifications');
+                  // ✅ 알림 읽고 돌아오면 뱃지 갱신
+                  await ref
+                      .read(notificationProvider.notifier)
+                      .refreshUnreadCount();
+                },
+              ),
+            ),
+
+            const SizedBox(width: 12),
+
+            // =====================
+            // 로그아웃
+            // =====================
+            Expanded(
+              child: FilledButton.icon(
+                icon: const Icon(Icons.logout_outlined),
+                label: const Text(
+                  '로그아웃',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  backgroundColor: Colors.redAccent,
+                ),
+                onPressed: () => _handleLogout(context),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Future<void> _handleLogout(BuildContext context) async {
     final confirmed = await showDialog<bool>(
@@ -31,45 +150,20 @@ class _VendorBottomBarState extends ConsumerState<VendorBottomBar> {
         ],
       ),
     );
+
     if (confirmed != true) return;
 
+    // ✅ 알림 상태 초기화
+    ref.read(notificationProvider.notifier).clear();
+
+    // ✅ 세션 제거
     await ref.read(sessionProvider.notifier).logout();
-    if (!mounted) return;
+
+    if (!context.mounted) return;
 
     Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginPage()),
       (_) => false,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return NavigationBar(
-      selectedIndex: _selectedIndex,
-      indicatorColor: Colors.transparent,
-      onDestinationSelected: (index) async {
-        setState(() => _selectedIndex = index);
-
-        if (index == 0) {
-          // ✅ vendor 홈
-          Navigator.pushNamedAndRemoveUntil(context, '/vendor', (r) => false);
-          return;
-        }
-        if (index == 1) {
-          // ✅ vendor 목록
-          Navigator.pushNamed(context, '/vendor-list');
-          return;
-        }
-        if (index == 2) {
-          await _handleLogout(context);
-          return;
-        }
-      },
-      destinations: const [
-        NavigationDestination(icon: Icon(Icons.home_outlined), label: '홈'),
-        NavigationDestination(icon: Icon(Icons.list_alt_outlined), label: '목록'),
-        NavigationDestination(icon: Icon(Icons.logout_outlined), label: '로그아웃'),
-      ],
     );
   }
 }

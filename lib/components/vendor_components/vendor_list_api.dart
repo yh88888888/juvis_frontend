@@ -1,19 +1,18 @@
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:juvis_faciliry/_core/util/auth_request.dart';
 import 'package:juvis_faciliry/config/api_config.dart';
 
 class VendorListApi {
-  /// GET /api/vendor/maintenance/requests?status=...
-  static Future<http.Response> fetchRequests({String? status}) async {
-    final base = '$apiBase/api/vendor/maintenance/requests';
-    final uri = (status == null || status.isEmpty)
-        ? Uri.parse(base)
-        : Uri.parse('$base?status=$status');
+  static Future<http.Response> fetchList({String? status}) async {
+    final uri = Uri.parse('$apiBase/api/vendor/maintenances').replace(
+      queryParameters: {
+        if (status != null && status.isNotEmpty) 'status': status,
+      },
+    );
 
-    debugPrint("VENDOR LIST url=$uri");
-
-    final res = await authRequest((accessToken) {
+    return authRequest((accessToken) {
+      // accessToken에 Bearer가 이미 포함되어 내려오는 구조라면 그대로 사용
+      // (너 로그인 raw에서 accessToken이 "Bearer ..."였음)
       return http.get(
         uri,
         headers: {
@@ -22,10 +21,5 @@ class VendorListApi {
         },
       );
     });
-
-    debugPrint("VENDOR LIST status=${res.statusCode}");
-    debugPrint("VENDOR LIST body=${res.body}");
-
-    return res;
   }
 }

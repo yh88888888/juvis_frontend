@@ -142,6 +142,8 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
                       ),
                       subtitle: Text(_fmt(n.createdAt)),
                       onTap: () async {
+                        // ✅ 상세로 바로 이동 (벤더도 동일 MaintenanceDetailPage로 OK:
+                        // 내부에서 role 기반으로 vendor endpoint 사용하도록 이미 구성돼 있음)
                         await Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -151,17 +153,25 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
                           ),
                         );
 
-                        // ✅ 상세 확인 후 읽음 처리
+                        // ✅ 상세 확인 후 읽음 처리 + unreadCount 갱신
                         if (!n.read) {
                           final success = await ref
                               .read(notificationProvider.notifier)
                               .markRead(n.id);
+
                           if (!success && context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(content: Text('읽음 처리 실패(서버 오류)')),
                             );
                           }
-                          // ✅ 미읽음 탭이면 필터가 적용되어 자동으로 목록에서 사라짐
+
+                          // ✅ 뱃지 숫자 갱신(이게 핵심)
+                          await ref
+                              .read(notificationProvider.notifier)
+                              .refreshUnreadCount();
+
+                          // ✅ (선택) 목록도 서버 기준으로 다시 당겨오고 싶으면
+                          // await ref.read(notificationProvider.notifier).refreshList();
                         }
                       },
                     ),

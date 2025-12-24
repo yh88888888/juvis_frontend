@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:juvis_faciliry/_core/util/auth_request.dart';
 import 'package:juvis_faciliry/_core/util/resp.dart';
@@ -7,7 +6,6 @@ import 'package:juvis_faciliry/config/api_config.dart';
 class AdminDashboardApi {
   static Future<http.Response> fetchSummary() async {
     final uri = Uri.parse('$apiBase/api/hq/maintenances/summary');
-    debugPrint('HQ SUMMARY url=$uri');
 
     final res = await authRequest((accessToken) {
       return http.get(
@@ -19,8 +17,6 @@ class AdminDashboardApi {
       );
     });
 
-    debugPrint('HQ SUMMARY status=${res.statusCode}');
-    debugPrint('HQ SUMMARY body=${res.body}');
     return res;
   }
 }
