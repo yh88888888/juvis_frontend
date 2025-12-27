@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:juvis_faciliry/_core/session/session_provider.dart';
@@ -8,6 +6,9 @@ import 'package:juvis_faciliry/components/detail_components/detail_provider.dart
 import 'package:juvis_faciliry/components/detail_components/maintenance_detail_api.dart';
 import 'package:juvis_faciliry/components/detail_components/maintenance_detail_item.dart';
 import 'package:juvis_faciliry/components/detail_photo_components/attachment_preview.dart';
+import 'package:juvis_faciliry/components/home_components/home_bottom_nav.dart';
+import 'package:juvis_faciliry/components/list_components/list_provider.dart';
+import 'package:juvis_faciliry/components/vendor_components/vendor_summary_provider.dart';
 
 class MaintenanceDetailPage extends ConsumerStatefulWidget {
   final int maintenanceId;
@@ -20,7 +21,6 @@ class MaintenanceDetailPage extends ConsumerStatefulWidget {
 }
 
 class _MaintenanceDetailPageState extends ConsumerState<MaintenanceDetailPage> {
-  // ✅ Vendor 견적 제출 중복 방지용 상태
   bool _submittingEstimate = false;
 
   @override
@@ -49,7 +49,7 @@ class _MaintenanceDetailPageState extends ConsumerState<MaintenanceDetailPage> {
         leadingWidth: 90,
         leading: InkWell(
           borderRadius: BorderRadius.circular(20),
-          onTap: () => Navigator.pop(context),
+          onTap: () => Navigator.pop(context, true),
           child: const Padding(
             padding: EdgeInsets.symmetric(horizontal: 12),
             child: Row(
@@ -68,12 +68,7 @@ class _MaintenanceDetailPageState extends ConsumerState<MaintenanceDetailPage> {
         error: (e, _) => Center(child: Text('상세 불러오기 실패: $e')),
         data: (d) {
           final status = _normStatus(d.status);
-          if (role == AppRole.vendor &&
-              (status == 'DRAFT' || status == 'REQUESTED')) {
-            return const Center(
-              child: Text('아직 견적 단계가 아닙니다.', style: TextStyle(fontSize: 16)),
-            );
-          }
+
           final children = <Widget>[
             const SizedBox(height: 12),
             _roleBanner(role),
@@ -83,35 +78,26 @@ class _MaintenanceDetailPageState extends ConsumerState<MaintenanceDetailPage> {
             _topSummaryCard(d),
             const SizedBox(height: 12),
 
-            // 1) HQ 1차검토
             if (_shouldShowHq1Card(status)) ...[
               _hq1ReviewCard(role, d),
               const SizedBox(height: 12),
-              if (role == AppRole.vendor && status == 'ESTIMATING') ...[
-                const SizedBox(height: 12),
-                ElevatedButton(
-                  onPressed: () => _openVendorEstimateDialog(context, d.id),
-                  child: const Text('견적 / 작업일 입력'),
-                ),
-              ],
             ],
 
-            // 2) Vendor 카드
             if (_shouldShowVendorEstimateCard(status)) ...[
               _vendorEstimateCard(role, d),
               const SizedBox(height: 12),
+              if (status == 'HQ2_REJECTED') ...[
+                _hq2ReviewCard(role, d),
+                const SizedBox(height: 12),
+              ],
             ],
 
-            // 3) HQ 2차검토
-,
-
-            // 4) 완료
             if (_shouldShowCompletedCard(status)) ...[
               _completedCard(role, d),
               const SizedBox(height: 12),
             ],
 
-            const SizedBox(height: 30),
+            const SizedBox(height: 110),
           ];
 
           return ListView(
@@ -121,7 +107,9 @@ class _MaintenanceDetailPageState extends ConsumerState<MaintenanceDetailPage> {
         },
       ),
 
-      bottomNavigationBar: asyncDetail.when(
+      bottomNavigationBar: const HomeBottomNav(),
+
+      bottomSheet: asyncDetail.when(
         loading: () => null,
         error: (_, __) => null,
         data: (d) => _buildActionBar(context, ref, role, d),
@@ -130,9 +118,9 @@ class _MaintenanceDetailPageState extends ConsumerState<MaintenanceDetailPage> {
   }
 
   // ============================================================
-  // ✅ 하단 액션바
+  // ✅ (A) 하단 액션바
   // ============================================================
-  static Widget? _buildActionBar(
+  Widget? _buildActionBar(
     BuildContext context,
     WidgetRef ref,
     AppRole role,
@@ -140,7 +128,6 @@ class _MaintenanceDetailPageState extends ConsumerState<MaintenanceDetailPage> {
   ) {
     final status = _normStatus(d.status);
 
-    // HQ 1차: REQUESTED -> 반려/승인
     if (role == AppRole.hq && status == 'REQUESTED') {
       return _twoButtons(
         leftText: '반려',
@@ -150,7 +137,6 @@ class _MaintenanceDetailPageState extends ConsumerState<MaintenanceDetailPage> {
       );
     }
 
-    // HQ 2차: APPROVAL_PENDING -> 반려/승인
     if (role == AppRole.hq && status == 'APPROVAL_PENDING') {
       return _twoButtons(
         leftText: '반려',
@@ -160,43 +146,25 @@ class _MaintenanceDetailPageState extends ConsumerState<MaintenanceDetailPage> {
       );
     }
 
-    // Vendor: ESTIMATING -> 견적 제출
-    if (role == AppRole.vendor && status == 'ESTIMATING') {
+    final canVendorSubmit =
+        role == AppRole.vendor &&
+        (status == 'ESTIMATING' ||
+            (status == 'HQ2_REJECTED' && d.estimateResubmitCount == 0));
+
+    if (canVendorSubmit) {
+      final btnText = (status == 'HQ2_REJECTED')
+          ? '견적 재제출 (1회)'
+          : '견적 / 작업일 입력';
       return _oneButton(
-        text: '견적 제출',
-        onPressed: () => _onSubmitEstimate(context, ref, role, d.id),
+        text: btnText,
+        onPressed: () => _submitEstimateFlow(context, ref, role, d),
       );
     }
 
-    // Vendor: HQ2_REJECTED + 재제출 1회
-    if (role == AppRole.vendor &&
-        status == 'HQ2_REJECTED' &&
-        d.estimateResubmitCount == 0) {
-      return _oneButton(
-        text: '견적 재제출 (1회)',
-        onPressed: () => _onSubmitEstimate(context, ref, role, d.id),
-      );
-    }
-
-    // Vendor: IN_PROGRESS -> 작업 완료 제출
     if (role == AppRole.vendor && status == 'IN_PROGRESS') {
       return _oneButton(
         text: '작업 완료 제출',
         onPressed: () => _onCompleteWork(context, ref, role, d.id),
-      );
-    }
-    // Branch: DRAFT -> 제출
-    if (role == AppRole.branch && status == 'DRAFT') {
-      return _oneButton(
-        text: '제출',
-        onPressed: () => _onBranchSubmit(context, ref, role, d.id),
-      );
-    }
-    // Branch: HQ1_REJECTED -> 다시 제출
-    if (role == AppRole.branch && status == 'HQ1_REJECTED') {
-      return _oneButton(
-        text: '다시 제출',
-        onPressed: () => _onBranchResubmit(context, ref, role, d.id),
       );
     }
 
@@ -204,18 +172,153 @@ class _MaintenanceDetailPageState extends ConsumerState<MaintenanceDetailPage> {
   }
 
   // ============================================================
-  // ✅ 액션 핸들러
+  // ✅ (B) 견적 제출 플로우
+  //   - 핵심 수정: 다이얼로그 컨트롤러 dispose는 다이얼로그 위젯 내부에서!
   // ============================================================
-  static void _refreshDetail(WidgetRef ref, int id, AppRole role) {
-    ref.invalidate(maintenanceDetailProvider((id: id, role: role)));
+  Future<void> _submitEstimateFlow(
+    BuildContext context,
+    WidgetRef ref,
+    AppRole role,
+    MaintenanceDetailItem d,
+  ) async {
+    if (_submittingEstimate) return;
+
+    final id = d.id;
+    final statusAtTap = _normStatus(d.status);
+
+    final canTap =
+        role == AppRole.vendor &&
+        (statusAtTap == 'ESTIMATING' ||
+            (statusAtTap == 'HQ2_REJECTED' && d.estimateResubmitCount == 0));
+
+    if (!canTap) {
+      _snack(context, '견적 제출 불가 상태입니다. 현재: $statusAtTap');
+      ref.invalidate(maintenanceDetailProvider((id: id, role: role)));
+      return;
+    }
+
+    // ✅ 입력 다이얼로그(컨트롤러는 다이얼로그가 소유/해제)
+    final form = await _openEstimateDialog(context);
+    if (form == null) return;
+
+    // ✅ pop/키보드 정리 먼저 (타이밍 꼬임 방지)
+    FocusManager.instance.primaryFocus?.unfocus();
+
+    // 서버 truth로 한 번 더 확인
+    try {
+      final fresh = await ref.read(
+        maintenanceDetailProvider((id: id, role: role)).future,
+      );
+      final freshStatus = _normStatus(fresh.status);
+
+      final canSubmitNow =
+          freshStatus == 'ESTIMATING' ||
+          (freshStatus == 'HQ2_REJECTED' && fresh.estimateResubmitCount == 0);
+
+      if (!canSubmitNow) {
+        if (!context.mounted) return;
+        _snack(context, '견적 제출 불가 상태입니다. 현재: $freshStatus');
+        ref.invalidate(maintenanceDetailProvider((id: id, role: role)));
+        return;
+      }
+    } catch (_) {
+      // fresh 실패해도 아래에서 시도는 진행
+    }
+
+    setState(() => _submittingEstimate = true);
+
+    try {
+      // ✅ await 전에 값 확보 (컨트롤러 접근 없음)
+      final amount = form.amount;
+      final comment = form.comment.isEmpty ? null : form.comment;
+      final startDate = form.startDate;
+      final endDate = form.endDate;
+
+      final res = await MaintenanceDetailApi.submitEstimate(
+        id: id,
+        estimateAmount: amount,
+        estimateComment: comment,
+        workStartDate: startDate,
+        workEndDate: endDate,
+      );
+
+      if (!context.mounted) return;
+
+      if (res.statusCode == 200) {
+        ref.invalidate(maintenanceDetailProvider((id: id, role: role)));
+        ref.invalidate(vendorSummaryProvider);
+        // ✅ 🔥 목록 갱신 트리거
+        ref.invalidate(maintenanceListProvider);
+        _snack(context, '견적 제출 완료');
+        return;
+      }
+
+      // 서버가 이미 APPROVAL_PENDING이면 UX는 "이미 제출됨"이 맞음
+      try {
+        final fresh = await ref.read(
+          maintenanceDetailProvider((id: id, role: role)).future,
+        );
+        final freshStatus = _normStatus(fresh.status);
+        ref.invalidate(maintenanceDetailProvider((id: id, role: role)));
+
+        if (freshStatus == 'APPROVAL_PENDING') {
+          _snack(context, '이미 제출되어 승인 대기 중입니다.');
+          return;
+        }
+      } catch (_) {}
+
+      ref.invalidate(maintenanceDetailProvider((id: id, role: role)));
+      _snack(context, '견적 제출 실패: ${res.statusCode}');
+    } catch (e) {
+      if (!context.mounted) return;
+      ref.invalidate(maintenanceDetailProvider((id: id, role: role)));
+      _snack(context, '견적 제출 오류: $e');
+    } finally {
+      if (mounted) setState(() => _submittingEstimate = false);
+    }
   }
 
-  static void _snack(BuildContext context, String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), duration: const Duration(seconds: 2)),
+  // ============================================================
+  // ✅ (C) 다이얼로그: 입력만 받고 닫기
+  //   - 핵심 수정: 컨트롤러 dispose를 여기서 하지 않는다!
+  // ============================================================
+  Future<_EstimateFormResult?> _openEstimateDialog(BuildContext context) async {
+    return showDialog<_EstimateFormResult>(
+      context: context,
+      barrierDismissible: !_submittingEstimate,
+      builder: (_) => const _EstimateDialog(),
     );
   }
 
+  // ============================================================
+  // ✅ 카드 표시 규칙
+  // ============================================================
+  static bool _shouldShowHq1Card(String status) {
+    return status == 'REQUESTED' ||
+        status == 'HQ1_REJECTED' ||
+        status == 'ESTIMATING' ||
+        status == 'APPROVAL_PENDING' ||
+        status == 'HQ2_REJECTED' ||
+        status == 'IN_PROGRESS' ||
+        status == 'COMPLETED' ||
+        status == 'DONE';
+  }
+
+  static bool _shouldShowVendorEstimateCard(String status) {
+    return status == 'APPROVAL_PENDING' ||
+        status == 'HQ2_REJECTED' ||
+        status == 'IN_PROGRESS' ||
+        status == 'COMPLETED' ||
+        status == 'DONE';
+  }
+
+  static bool _shouldShowCompletedCard(String status) {
+    return status == 'COMPLETED' || status == 'DONE';
+  }
+
+  // ============================================================
+  // ✅ 카드 UI
+  // ============================================================
   static Widget _workflowHintCard() {
     return _sectionCard(
       title: '<진행 순서 안내>',
@@ -235,452 +338,6 @@ class _MaintenanceDetailPageState extends ConsumerState<MaintenanceDetailPage> {
     );
   }
 
-  Future<void> _openVendorEstimateDialog(
-    BuildContext context,
-    int requestId,
-  ) async {
-    final amountCtrl = TextEditingController();
-    final commentCtrl = TextEditingController();
-    DateTime? startDate;
-    DateTime? endDate;
-
-    await showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('견적 / 작업일 입력'),
-        content: SingleChildScrollView(
-          child: Column(
-            children: [
-              TextField(
-                controller: amountCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: '견적 금액'),
-              ),
-              TextField(
-                controller: commentCtrl,
-                decoration: const InputDecoration(labelText: '견적 코멘트'),
-              ),
-              const SizedBox(height: 8),
-              ElevatedButton(
-                onPressed: () async {
-                  startDate = await showDatePicker(
-                    context: context,
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime(2100),
-                    initialDate: DateTime.now(),
-                  );
-                },
-                child: const Text('작업 시작 예정일'),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  if (_submittingEstimate) return;
-                  setState(() => _submittingEstimate = true);
-
-                  try {
-                    await MaintenanceDetailApi.submitEstimate(
-                      id: requestId,
-                      estimateAmount: amountCtrl.text,
-                      estimateComment: commentCtrl.text,
-                      workStartDate: startDate,
-                      workEndDate: endDate,
-                    );
-                    final session = ref.read(sessionProvider);
-                    final role = _resolveRole(session?.role);
-                    ref.invalidate(
-                      maintenanceDetailProvider((id: requestId, role: role)),
-                    );
-                    Navigator.pop(context); // 팝업 닫기
-                  } finally {
-                    if (mounted) {
-                      setState(() => _submittingEstimate = false);
-                    }
-                  }
-                },
-                child: const Text('작업 종료 예정일'),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('취소'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              await MaintenanceDetailApi.submitEstimate(
-                id: requestId,
-                estimateAmount: amountCtrl.text,
-                estimateComment: commentCtrl.text,
-                workStartDate: startDate,
-                workEndDate: endDate,
-              );
-              Navigator.pop(context);
-            },
-            child: const Text('제출'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static Future<void> _onHqApproveRequest(
-    BuildContext context,
-    WidgetRef ref,
-    AppRole role,
-    int id,
-  ) async {
-    try {
-      final res = await MaintenanceDetailApi.hqApproveRequest(id: id);
-
-      if (res.statusCode == 200) {
-        _snack(context, '승인 완료');
-        Navigator.pop(context, true);
-        _refreshDetail(ref, id, role);
-        return;
-      }
-
-      final ok = await _confirmStatusByRefetch(
-        id: id,
-        role: role,
-        expectedStatus: 'ESTIMATING',
-      );
-
-      if (ok) {
-        _snack(context, '승인 완료');
-        Navigator.pop(context, true);
-        _refreshDetail(ref, id, role);
-      } else {
-        _snack(context, '승인 실패: ${res.statusCode}');
-      }
-    } catch (e) {
-      final ok = await _confirmStatusByRefetch(
-        id: id,
-        role: role,
-        expectedStatus: 'ESTIMATING',
-      );
-
-      if (ok) {
-        _snack(context, '승인 완료 (재확인됨)');
-        Navigator.pop(context, true);
-        _refreshDetail(ref, id, role);
-      } else {
-        _snack(context, '승인 실패: $e');
-      }
-    }
-  }
-
-  static Future<void> _onHqApproveEstimate(
-    BuildContext context,
-    WidgetRef ref,
-    AppRole role,
-    int id,
-  ) async {
-    try {
-      final res = await MaintenanceDetailApi.hqApproveEstimate(id: id);
-
-      if (res.statusCode == 200) {
-        _snack(context, '승인 완료');
-        Navigator.pop(context, true);
-        _refreshDetail(ref, id, role);
-        return;
-      }
-
-      final ok = await _confirmStatusByRefetch(
-        id: id,
-        role: role,
-        expectedStatus: 'IN_PROGRESS',
-      );
-
-      if (ok) {
-        _snack(context, '승인 완료 (재확인됨)');
-        Navigator.pop(context, true);
-        _refreshDetail(ref, id, role);
-      } else {
-        _snack(context, '승인 실패: ${res.statusCode}');
-      }
-    } catch (e) {
-      final ok = await _confirmStatusByRefetch(
-        id: id,
-        role: role,
-        expectedStatus: 'IN_PROGRESS',
-      );
-
-      if (ok) {
-        _snack(context, '승인 완료 (재확인됨)');
-        Navigator.pop(context, true);
-        _refreshDetail(ref, id, role);
-      } else {
-        _snack(context, '승인 실패: $e');
-      }
-    }
-  }
-
-  static Future<void> _onHqRejectRequest(
-    BuildContext context,
-    WidgetRef ref,
-    AppRole role,
-    int id,
-  ) async {
-    final reason = await _textDialog(
-      context,
-      title: '1차 반려 사유 입력',
-      hint: '지점 요청 반려 사유를 입력하세요',
-      confirmText: '반려',
-    );
-    if (reason == null || reason.trim().isEmpty) return;
-
-    try {
-      final res = await MaintenanceDetailApi.hqRejectRequest(
-        id: id,
-        reason: reason.trim(),
-      );
-
-      if (res.statusCode == 200) {
-        _snack(context, '1차 반려 처리 완료');
-        _refreshDetail(ref, id, role);
-        return;
-      }
-
-      final ok = await _confirmStatusByRefetch(
-        id: id,
-        role: role,
-        expectedStatus: 'HQ1_REJECTED',
-      );
-
-      if (ok) {
-        _snack(context, '1차 반려 처리 완료 (재확인됨)');
-        _refreshDetail(ref, id, role);
-      } else {
-        _snack(context, '1차 반려 실패: ${res.statusCode}');
-      }
-    } catch (e) {
-      final ok = await _confirmStatusByRefetch(
-        id: id,
-        role: role,
-        expectedStatus: 'HQ1_REJECTED',
-      );
-
-      if (ok) {
-        _snack(context, '1차 반려 처리 완료 (재확인됨)');
-        _refreshDetail(ref, id, role);
-      } else {
-        _snack(context, '1차 반려 실패: $e');
-      }
-    }
-  }
-
-  static Future<void> _onHqRejectEstimate(
-    BuildContext context,
-    WidgetRef ref,
-    AppRole role,
-    int id,
-  ) async {
-    final reason = await _textDialog(
-      context,
-      title: '2차 반려 사유 입력',
-      hint: '견적 반려 사유를 입력하세요',
-      confirmText: '반려',
-    );
-    if (reason == null || reason.trim().isEmpty) return;
-
-    try {
-      final res = await MaintenanceDetailApi.hqRejectEstimate(
-        id: id,
-        reason: reason.trim(),
-      );
-
-      if (res.statusCode == 200) {
-        _snack(context, '2차 반려 처리 완료');
-        _refreshDetail(ref, id, role);
-        return;
-      }
-
-      final ok = await _confirmStatusByRefetch(
-        id: id,
-        role: role,
-        expectedStatus: 'HQ2_REJECTED',
-      );
-
-      if (ok) {
-        _snack(context, '2차 반려 처리 완료 (재확인됨)');
-        _refreshDetail(ref, id, role);
-      } else {
-        _snack(context, '2차 반려 실패: ${res.statusCode}');
-      }
-    } catch (e) {
-      final ok = await _confirmStatusByRefetch(
-        id: id,
-        role: role,
-        expectedStatus: 'HQ2_REJECTED',
-      );
-
-      if (ok) {
-        _snack(context, '2차 반려 처리 완료 (재확인됨)');
-        _refreshDetail(ref, id, role);
-      } else {
-        _snack(context, '2차 반려 실패: $e');
-      }
-    }
-  }
-
-  static Future<void> _onSubmitEstimate(
-    BuildContext context,
-    WidgetRef ref,
-    AppRole role,
-    int id,
-  ) async {
-    final dto = await showDialog<_EstimateFormResult>(
-      context: context,
-      builder: (_) => const _EstimateDialog(),
-    );
-    if (dto == null) return;
-
-    final res = await MaintenanceDetailApi.submitEstimate(
-      id: id,
-      estimateAmount: dto.amount,
-      estimateComment: dto.comment.isEmpty ? null : dto.comment,
-      workStartDate: dto.startDate,
-      workEndDate: dto.endDate,
-    );
-
-    if (res.statusCode == 200) {
-      _snack(context, '견적 제출 완료');
-      _refreshDetail(ref, id, role);
-    } else {
-      _snack(context, '견적 제출 실패: ${res.statusCode}');
-    }
-  }
-
-  static Future<void> _onCompleteWork(
-    BuildContext context,
-    WidgetRef ref,
-    AppRole role,
-    int id,
-  ) async {
-    final dto = await showDialog<_CompleteFormResult>(
-      context: context,
-      builder: (_) => const _CompleteDialog(),
-    );
-    if (dto == null) return;
-
-    final res = await MaintenanceDetailApi.completeWork(
-      id: id,
-      resultComment: dto.comment,
-      resultPhotoUrl: dto.photoUrl?.trim().isEmpty == true
-          ? null
-          : dto.photoUrl?.trim(),
-      actualEndDate: dto.completedDate,
-    );
-
-    if (res.statusCode == 200) {
-      _snack(context, '작업 완료 제출 완료');
-      _refreshDetail(ref, id, role);
-    } else {
-      _snack(context, '작업 완료 제출 실패: ${res.statusCode}');
-    }
-  }
-
-  static Future<void> _onBranchResubmit(
-    BuildContext context,
-    WidgetRef ref,
-    AppRole role,
-    int id,
-  ) async {
-    final res = await MaintenanceDetailApi.branchResubmit(id: id);
-    if (res.statusCode == 200) {
-      _snack(context, '재제출 완료');
-      _refreshDetail(ref, id, role);
-    } else {
-      _snack(context, '재제출 실패: ${res.statusCode}');
-    }
-  }
-
-  static Future<void> _onBranchSubmit(
-    BuildContext context,
-    WidgetRef ref,
-    AppRole role,
-    int id,
-  ) async {
-    try {
-      final res = await MaintenanceDetailApi.branchSubmit(id: id);
-
-      if (res.statusCode == 200) {
-        _snack(context, '제출 완료');
-        _refreshDetail(ref, id, role); // ✅ 상태만 DRAFT -> REQUESTED로 갱신
-        return;
-      }
-
-      // 혹시 서버가 500을 내도 실제로는 상태가 바뀌는 케이스 방어(너 코드 패턴 유지)
-      final ok = await _confirmStatusByRefetch(
-        id: id,
-        role: role,
-        expectedStatus: 'REQUESTED',
-      );
-
-      if (ok) {
-        _snack(context, '제출 완료 (재확인됨)');
-        _refreshDetail(ref, id, role);
-      } else {
-        _snack(context, '제출 실패: ${res.statusCode}');
-      }
-    } catch (e) {
-      final ok = await _confirmStatusByRefetch(
-        id: id,
-        role: role,
-        expectedStatus: 'REQUESTED',
-      );
-
-      if (ok) {
-        _snack(context, '제출 완료 (재확인됨)');
-        _refreshDetail(ref, id, role);
-      } else {
-        _snack(context, '제출 실패: $e');
-      }
-    }
-  }
-
-  // ============================================================
-  // ✅ 카드 표시 규칙
-  // ============================================================
-  static bool _shouldShowHq1Card(String status) {
-    // 1차 검토는 “요청~이후 전 구간”에서 이력으로 보여줘도 됨
-    return status == 'REQUESTED' ||
-        status == 'HQ1_REJECTED' ||
-        status == 'ESTIMATING' ||
-        status == 'APPROVAL_PENDING' ||
-        status == 'HQ2_REJECTED' ||
-        status == 'IN_PROGRESS' ||
-        status == 'COMPLETED' ||
-        status == 'DONE';
-  }
-
-  static bool _shouldShowVendorEstimateCard(String status) {
-    return status == 'APPROVAL_PENDING' ||
-        status == 'HQ2_REJECTED' ||
-        status == 'IN_PROGRESS' ||
-        status == 'COMPLETED' ||
-        status == 'DONE';
-  }
-
-  static bool _shouldShowHq2Card(String status) {
-    return status == 'APPROVAL_PENDING' ||
-        status == 'HQ2_REJECTED' ||
-        status == 'IN_PROGRESS' ||
-        status == 'COMPLETED' ||
-        status == 'DONE';
-  }
-
-  static bool _shouldShowCompletedCard(String status) {
-    return status == 'COMPLETED' || status == 'DONE';
-  }
-
-  // ============================================================
-  // ✅ 카드 UI (요청사항 핵심 반영)
-  // ============================================================
-
-  // 1) HQ 1차검토: "현재 상태" 제거 -> "1차 검토 결과"만 표시
   static Widget _hq1ReviewCard(AppRole role, MaintenanceDetailItem d) {
     final status = _normStatus(d.status);
     final reason = (d.requestRejectedReason ?? '').trim();
@@ -688,9 +345,7 @@ class _MaintenanceDetailPageState extends ConsumerState<MaintenanceDetailPage> {
     final String result = () {
       if (status == 'REQUESTED') return '대기';
       if (status == 'HQ1_REJECTED') return '반려';
-      // 1차 승인이 한 번이라도 됐으면 이후 단계에서도 "승인"으로 유지
       if (d.requestApprovedAt != null) return '승인';
-      // fallback
       return '처리됨';
     }();
 
@@ -704,11 +359,8 @@ class _MaintenanceDetailPageState extends ConsumerState<MaintenanceDetailPage> {
         const SizedBox(height: 6),
         _kv('1차 검토 결과', result),
         if (showRejectReason) _kv('반려 사유', reason, labelColor: Colors.red),
-
-        // ✅ 반려여도 "결정자/결정일" 표시 (백엔드가 채워서 내려줘야 함)
         _kv('결정자', d.requestApprovedByName),
         _kv('결정일', _fmtNullableDateTime(d.requestApprovedAt)),
-
         const SizedBox(height: 6),
         if (role == AppRole.hq)
           _info('요청서 제출에 대한 검토.')
@@ -718,7 +370,6 @@ class _MaintenanceDetailPageState extends ConsumerState<MaintenanceDetailPage> {
     );
   }
 
-  // 2) Vendor 견적 카드: 반려사유는 3번 카드로 이동(요구사항)
   static Widget _vendorEstimateCard(AppRole role, MaintenanceDetailItem d) {
     return _sectionCard(
       title: '견적 / 작업 정보',
@@ -728,24 +379,19 @@ class _MaintenanceDetailPageState extends ConsumerState<MaintenanceDetailPage> {
         _kv('업체명', d.vendorName),
         _kv('업체 연락처', d.vendorPhone),
         const Divider(height: 15),
-
         _kv(
           '견적 금액',
           d.estimateAmount == null ? null : '${_fmtMoney(d.estimateAmount!)} 원',
         ),
         _kv('견적 코멘트', d.estimateComment),
         const Divider(height: 15),
-
         _kv(
-          '작업 시작예정일',
+          '시작예정일',
           d.workStartDate == null ? null : _fmtDate(d.workStartDate!),
         ),
+        _kv('종료예정일', d.workEndDate == null ? null : _fmtDate(d.workEndDate!)),
         _kv(
-          '작업 종료예정일',
-          d.workEndDate == null ? null : _fmtDate(d.workEndDate!),
-        ),
-        _kv(
-          '업체 견적 제출일',
+          '견적 제출일',
           d.vendorSubmittedAt == null
               ? null
               : _fmtDateTime(d.vendorSubmittedAt!),
@@ -759,7 +405,6 @@ class _MaintenanceDetailPageState extends ConsumerState<MaintenanceDetailPage> {
     );
   }
 
-  // 3) HQ 2차검토: "현재 상태" 제거 -> "2차 검토 결과"만 표시
   static Widget _hq2ReviewCard(AppRole role, MaintenanceDetailItem d) {
     final status = _normStatus(d.status);
     final reason = (d.estimateRejectedReason ?? '').trim();
@@ -767,7 +412,6 @@ class _MaintenanceDetailPageState extends ConsumerState<MaintenanceDetailPage> {
     final String result = () {
       if (status == 'APPROVAL_PENDING') return '대기';
       if (status == 'HQ2_REJECTED') return '반려';
-      // 2차 승인이 한 번이라도 됐으면 이후 단계에서도 "승인" 유지
       if (d.estimateApprovedAt != null) return '승인';
       return '처리됨';
     }();
@@ -782,11 +426,8 @@ class _MaintenanceDetailPageState extends ConsumerState<MaintenanceDetailPage> {
         const SizedBox(height: 6),
         _kv('2차 검토 결과', result),
         if (showRejectReason) _kv('반려 사유', reason, labelColor: Colors.red),
-
-        // ✅ 반려여도 "결정자/결정일" 표시 (백엔드가 채워서 내려줘야 함)
         _kv('결정자', d.estimateApprovedByName),
         _kv('결정일', _fmtNullableDateTime(d.estimateApprovedAt)),
-
         const SizedBox(height: 6),
         if (role == AppRole.hq)
           _info('2차 검토는 APPROVAL_PENDING 상태에서 결정됩니다.')
@@ -842,7 +483,7 @@ class _MaintenanceDetailPageState extends ConsumerState<MaintenanceDetailPage> {
               runSpacing: 8,
               children: [
                 _MetaChip(
-                  label: "[" + maintenanceStatusLabel(d.status) + "]",
+                  label: "[${maintenanceStatusLabel(_normStatus(d.status))}]",
                   icon: Icons.priority_high,
                 ),
                 _MetaChip(label: d.categoryName, icon: Icons.category_outlined),
@@ -874,41 +515,72 @@ class _MaintenanceDetailPageState extends ConsumerState<MaintenanceDetailPage> {
   }
 
   // ============================================================
-  // ✅ UI 유틸
+  // ✅ 공통 UI 유틸
   // ============================================================
-  static Widget _oneButton({
-    required String text,
-    required VoidCallback onPressed,
-  }) {
+  Widget _oneButton({required String text, required VoidCallback onPressed}) {
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              blurRadius: 10,
+              offset: const Offset(0, -2),
+              color: Colors.black.withOpacity(0.06),
+            ),
+          ],
+        ),
         child: SizedBox(
-          height: 52,
           width: double.infinity,
-          child: ElevatedButton(onPressed: onPressed, child: Text(text)),
+          height: 52,
+          child: ElevatedButton(
+            onPressed: _submittingEstimate ? null : onPressed,
+            child: Text(_submittingEstimate ? '처리 중...' : text),
+          ),
         ),
       ),
     );
   }
 
-  static Widget _twoButtons({
+  Widget _twoButtons({
     required String leftText,
     required VoidCallback onLeft,
     required String rightText,
     required VoidCallback onRight,
   }) {
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              blurRadius: 10,
+              offset: const Offset(0, -2),
+              color: Colors.black.withOpacity(0.06),
+            ),
+          ],
+        ),
         child: Row(
           children: [
             Expanded(
-              child: OutlinedButton(onPressed: onLeft, child: Text(leftText)),
+              child: SizedBox(
+                height: 52,
+                child: OutlinedButton(onPressed: onLeft, child: Text(leftText)),
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: ElevatedButton(onPressed: onRight, child: Text(rightText)),
+              child: SizedBox(
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: onRight,
+                  child: Text(rightText),
+                ),
+              ),
             ),
           ],
         ),
@@ -1035,6 +707,12 @@ class _MaintenanceDetailPageState extends ConsumerState<MaintenanceDetailPage> {
     );
   }
 
+  static void _snack(BuildContext context, String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), duration: const Duration(seconds: 2)),
+    );
+  }
+
   static String _normStatus(String status) => status.trim().toUpperCase();
 
   static AppRole _resolveRole(dynamic rawRole) {
@@ -1065,6 +743,157 @@ class _MaintenanceDetailPageState extends ConsumerState<MaintenanceDetailPage> {
     return sb.toString();
   }
 
+  // ============================================================
+  // ✅ HQ/Vendor 액션 핸들러
+  // ============================================================
+  static void _refreshDetail(WidgetRef ref, int id, AppRole role) {
+    ref.invalidate(maintenanceDetailProvider((id: id, role: role)));
+  }
+
+  static Future<void> _onHqApproveRequest(
+    BuildContext context,
+    WidgetRef ref,
+    AppRole role,
+    int id,
+  ) async {
+    try {
+      final res = await MaintenanceDetailApi.hqApproveRequest(id: id);
+      if (!context.mounted) return;
+
+      if (res.statusCode == 200) {
+        _snack(context, '승인 완료');
+        _refreshDetail(ref, id, role);
+        return;
+      }
+      _snack(context, '승인 실패: ${res.statusCode}');
+    } catch (e) {
+      if (!context.mounted) return;
+      _snack(context, '승인 실패: $e');
+    }
+  }
+
+  static Future<void> _onHqApproveEstimate(
+    BuildContext context,
+    WidgetRef ref,
+    AppRole role,
+    int id,
+  ) async {
+    try {
+      final res = await MaintenanceDetailApi.hqApproveEstimate(id: id);
+      if (!context.mounted) return;
+
+      if (res.statusCode == 200) {
+        _snack(context, '승인 완료');
+        _refreshDetail(ref, id, role);
+        return;
+      }
+      _snack(context, '승인 실패: ${res.statusCode}');
+    } catch (e) {
+      if (!context.mounted) return;
+      _snack(context, '승인 실패: $e');
+    }
+  }
+
+  static Future<void> _onHqRejectRequest(
+    BuildContext context,
+    WidgetRef ref,
+    AppRole role,
+    int id,
+  ) async {
+    final reason = await _textDialog(
+      context,
+      title: '1차 반려 사유 입력',
+      hint: '지점 요청 반려 사유를 입력하세요',
+      confirmText: '반려',
+    );
+    if (reason == null || reason.trim().isEmpty) return;
+
+    try {
+      final res = await MaintenanceDetailApi.hqRejectRequest(
+        id: id,
+        reason: reason.trim(),
+      );
+      if (!context.mounted) return;
+
+      if (res.statusCode == 200) {
+        _snack(context, '1차 반려 처리 완료');
+        _refreshDetail(ref, id, role);
+        return;
+      }
+      _snack(context, '1차 반려 실패: ${res.statusCode}');
+    } catch (e) {
+      if (!context.mounted) return;
+      _snack(context, '1차 반려 실패: $e');
+    }
+  }
+
+  static Future<void> _onHqRejectEstimate(
+    BuildContext context,
+    WidgetRef ref,
+    AppRole role,
+    int id,
+  ) async {
+    final reason = await _textDialog(
+      context,
+      title: '2차 반려 사유 입력',
+      hint: '견적 반려 사유를 입력하세요',
+      confirmText: '반려',
+    );
+    if (reason == null || reason.trim().isEmpty) return;
+
+    try {
+      final res = await MaintenanceDetailApi.hqRejectEstimate(
+        id: id,
+        reason: reason.trim(),
+      );
+      if (!context.mounted) return;
+
+      if (res.statusCode == 200) {
+        _snack(context, '2차 반려 처리 완료');
+        _refreshDetail(ref, id, role);
+        return;
+      }
+      _snack(context, '2차 반려 실패: ${res.statusCode}');
+    } catch (e) {
+      if (!context.mounted) return;
+      _snack(context, '2차 반려 실패: $e');
+    }
+  }
+
+  static Future<void> _onCompleteWork(
+    BuildContext context,
+    WidgetRef ref,
+    AppRole role,
+    int id,
+  ) async {
+    final dto = await showDialog<_CompleteFormResult>(
+      context: context,
+      builder: (_) => const _CompleteDialog(),
+    );
+    if (dto == null) return;
+
+    FocusManager.instance.primaryFocus?.unfocus();
+
+    final res = await MaintenanceDetailApi.completeWork(
+      id: id,
+      resultComment: dto.comment,
+      resultPhotoUrl: dto.photoUrl?.trim().isEmpty == true
+          ? null
+          : dto.photoUrl?.trim(),
+      actualEndDate: dto.completedDate,
+    );
+
+    if (!context.mounted) return;
+
+    if (res.statusCode == 200) {
+      _snack(context, '작업 완료 제출 완료');
+      _refreshDetail(ref, id, role);
+    } else {
+      _snack(context, '작업 완료 제출 실패: ${res.statusCode}');
+    }
+  }
+
+  // ✅ 핵심 수정: 컨트롤러를 밖에서 만들고 dispose 하지 말고, 다이얼로그 위젯이 소유/해제
   static Future<String?> _textDialog(
     BuildContext context, {
     required String title,
@@ -1072,34 +901,20 @@ class _MaintenanceDetailPageState extends ConsumerState<MaintenanceDetailPage> {
     TextInputType keyboardType = TextInputType.text,
     String confirmText = '확인',
   }) async {
-    final ctrl = TextEditingController();
     return showDialog<String>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: ctrl,
-          keyboardType: keyboardType,
-          maxLines: 4,
-          decoration: InputDecoration(hintText: hint),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('취소'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, ctrl.text),
-            child: Text(confirmText),
-          ),
-        ],
+      builder: (_) => _TextInputDialog(
+        title: title,
+        hint: hint,
+        keyboardType: keyboardType,
+        confirmText: confirmText,
       ),
     );
   }
 }
 
 // ============================================================
-// ✅ Vendor 견적 입력 다이얼로그
+// ✅ 견적 입력 결과
 // ============================================================
 class _EstimateFormResult {
   final String amount;
@@ -1110,11 +925,14 @@ class _EstimateFormResult {
   _EstimateFormResult({
     required this.amount,
     required this.comment,
-    required this.startDate,
-    required this.endDate,
+    this.startDate,
+    this.endDate,
   });
 }
 
+// ============================================================
+// ✅ 견적 입력 다이얼로그 (컨트롤러/포커스 수명은 여기서 책임)
+// ============================================================
 class _EstimateDialog extends StatefulWidget {
   const _EstimateDialog();
 
@@ -1123,10 +941,18 @@ class _EstimateDialog extends StatefulWidget {
 }
 
 class _EstimateDialogState extends State<_EstimateDialog> {
-  final _amountCtrl = TextEditingController();
-  final _commentCtrl = TextEditingController();
-  DateTime? _start;
-  DateTime? _end;
+  late final TextEditingController _amountCtrl;
+  late final TextEditingController _commentCtrl;
+
+  DateTime? _startDate;
+  DateTime? _endDate;
+
+  @override
+  void initState() {
+    super.initState();
+    _amountCtrl = TextEditingController();
+    _commentCtrl = TextEditingController();
+  }
 
   @override
   void dispose() {
@@ -1135,34 +961,52 @@ class _EstimateDialogState extends State<_EstimateDialog> {
     super.dispose();
   }
 
+  String _fmt(DateTime d) =>
+      "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
+
   Future<void> _pickStart() async {
-    final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
-      firstDate: DateTime(now.year - 1),
-      lastDate: DateTime(now.year + 3),
-      initialDate: _start ?? now,
+      firstDate: DateTime.now(),
+      lastDate: DateTime(2100),
+      initialDate: _startDate ?? DateTime.now(),
     );
-    if (picked == null) return;
-    setState(() => _start = picked);
+    if (!mounted) return;
+    if (picked != null) setState(() => _startDate = picked);
   }
 
   Future<void> _pickEnd() async {
-    final now = DateTime.now();
+    final base = _startDate ?? DateTime.now();
     final picked = await showDatePicker(
       context: context,
-      firstDate: DateTime(now.year - 1),
-      lastDate: DateTime(now.year + 3),
-      initialDate: _end ?? (_start ?? now),
+      firstDate: base,
+      lastDate: DateTime(2100),
+      initialDate: _endDate ?? base,
     );
-    if (picked == null) return;
-    setState(() => _end = picked);
+    if (!mounted) return;
+    if (picked != null) setState(() => _endDate = picked);
+  }
+
+  void _submit() {
+    final amount = _amountCtrl.text.trim();
+    if (amount.isEmpty) return;
+
+    FocusManager.instance.primaryFocus?.unfocus();
+
+    Navigator.of(context).pop(
+      _EstimateFormResult(
+        amount: amount,
+        comment: _commentCtrl.text.trim(),
+        startDate: _startDate,
+        endDate: _endDate,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('견적 제출'),
+      title: const Text('견적 / 작업일 입력'),
       content: SingleChildScrollView(
         child: Column(
           children: [
@@ -1170,7 +1014,7 @@ class _EstimateDialogState extends State<_EstimateDialog> {
               controller: _amountCtrl,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
-                labelText: '견적금액',
+                labelText: '견적 금액',
                 hintText: '예: 150000',
               ),
             ),
@@ -1179,7 +1023,7 @@ class _EstimateDialogState extends State<_EstimateDialog> {
               controller: _commentCtrl,
               maxLines: 3,
               decoration: const InputDecoration(
-                labelText: '코멘트',
+                labelText: '견적 코멘트',
                 hintText: '견적 관련 코멘트',
               ),
             ),
@@ -1189,14 +1033,18 @@ class _EstimateDialogState extends State<_EstimateDialog> {
                 Expanded(
                   child: OutlinedButton(
                     onPressed: _pickStart,
-                    child: Text(_start == null ? '시작일 선택' : _fmt(_start!)),
+                    child: Text(
+                      _startDate == null ? '작업 시작 예정일' : _fmt(_startDate!),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: OutlinedButton(
                     onPressed: _pickEnd,
-                    child: Text(_end == null ? '종료일 선택' : _fmt(_end!)),
+                    child: Text(
+                      _endDate == null ? '작업 종료 예정일' : _fmt(_endDate!),
+                    ),
                   ),
                 ),
               ],
@@ -1208,35 +1056,84 @@ class _EstimateDialogState extends State<_EstimateDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            FocusManager.instance.primaryFocus?.unfocus();
+            Navigator.of(context).pop(null);
+          },
           child: const Text('취소'),
         ),
-        ElevatedButton(
-          onPressed: () {
-            final amount = _amountCtrl.text.trim();
-            if (amount.isEmpty) return;
-            Navigator.pop(
-              context,
-              _EstimateFormResult(
-                amount: amount,
-                comment: _commentCtrl.text.trim(),
-                startDate: _start,
-                endDate: _end,
-              ),
-            );
-          },
-          child: const Text('제출'),
-        ),
+        ElevatedButton(onPressed: _submit, child: const Text('제출')),
       ],
     );
   }
-
-  String _fmt(DateTime d) =>
-      "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
 }
 
 // ============================================================
-// ✅ Vendor 작업완료 입력 다이얼로그
+// ✅ 반려 사유 입력 다이얼로그 (컨트롤러 수명 책임)
+// ============================================================
+class _TextInputDialog extends StatefulWidget {
+  final String title;
+  final String hint;
+  final TextInputType keyboardType;
+  final String confirmText;
+
+  const _TextInputDialog({
+    required this.title,
+    required this.hint,
+    required this.keyboardType,
+    required this.confirmText,
+  });
+
+  @override
+  State<_TextInputDialog> createState() => _TextInputDialogState();
+}
+
+class _TextInputDialogState extends State<_TextInputDialog> {
+  late final TextEditingController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _confirm() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    Navigator.of(context).pop(_ctrl.text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: TextField(
+        controller: _ctrl,
+        keyboardType: widget.keyboardType,
+        maxLines: 4,
+        decoration: InputDecoration(hintText: widget.hint),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () {
+            FocusManager.instance.primaryFocus?.unfocus();
+            Navigator.of(context).pop(null);
+          },
+          child: const Text('취소'),
+        ),
+        ElevatedButton(onPressed: _confirm, child: Text(widget.confirmText)),
+      ],
+    );
+  }
+}
+
+// ============================================================
+// ✅ Vendor 작업완료 입력 다이얼로그(기존 유지)
 // ============================================================
 class _CompleteFormResult {
   final String comment;
@@ -1277,6 +1174,7 @@ class _CompleteDialogState extends State<_CompleteDialog> {
       lastDate: DateTime(now.year + 3),
       initialDate: _completed ?? now,
     );
+    if (!mounted) return;
     if (picked == null) return;
     setState(() => _completed = picked);
   }
@@ -1318,13 +1216,19 @@ class _CompleteDialogState extends State<_CompleteDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            FocusManager.instance.primaryFocus?.unfocus();
+            Navigator.pop(context);
+          },
           child: const Text('취소'),
         ),
         ElevatedButton(
           onPressed: () {
             final c = _commentCtrl.text.trim();
             if (c.isEmpty) return;
+
+            FocusManager.instance.primaryFocus?.unfocus();
+
             Navigator.pop(
               context,
               _CompleteFormResult(
@@ -1341,6 +1245,9 @@ class _CompleteDialogState extends State<_CompleteDialog> {
   }
 }
 
+// ============================================================
+// ✅ status 라벨
+// ============================================================
 String maintenanceStatusLabel(String status) {
   switch (status) {
     case 'REQUESTED':
@@ -1353,12 +1260,14 @@ String maintenanceStatusLabel(String status) {
       return '작업중';
     case 'COMPLETED':
       return '작업 완료';
+    case 'HQ1_REJECTED':
+    case 'HQ2_REJECTED':
     case 'REJECTED':
       return '반려';
     case 'DRAFT':
       return '임시 저장';
     default:
-      return status; // 혹시 모를 신규 상태 방어
+      return status;
   }
 }
 
@@ -1388,80 +1297,5 @@ class _MetaChip extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-// ============================================================
-// ✅ Resp 래퍼
-// ============================================================
-class Resp<T> {
-  final int status;
-  final String? msg;
-  final T? body;
-
-  const Resp({required this.status, required this.msg, required this.body});
-
-  bool get ok => status == 200;
-
-  static Resp<dynamic> fromBody(String bodyStr) {
-    final decoded = jsonDecode(bodyStr);
-    if (decoded is! Map<String, dynamic>) {
-      return Resp(status: 500, msg: 'Invalid response format', body: decoded);
-    }
-    return fromJson(decoded);
-  }
-
-  static Resp<dynamic> fromJson(Map<String, dynamic> json) {
-    final status = (json['status'] as num?)?.toInt() ?? 500;
-    final msg = json['msg']?.toString();
-    final body = json['body'];
-    return Resp(status: status, msg: msg, body: body);
-  }
-}
-
-// ============================================================
-// ✅ 500이어도 refetch 확인 (http/dio 둘 다 대응)
-// ============================================================
-Future<bool> _confirmStatusByRefetch({
-  required int id,
-  required AppRole role,
-  required String expectedStatus,
-}) async {
-  try {
-    dynamic res;
-
-    if (role == AppRole.branch) {
-      res = await MaintenanceDetailApi.fetchBranchDetail(id);
-    } else if (role == AppRole.hq) {
-      res = await MaintenanceDetailApi.fetchHqDetail(id);
-    } else if (role == AppRole.vendor) {
-      res = await MaintenanceDetailApi.fetchVendorDetail(id);
-    } else {
-      throw Exception('권한 확인 필요');
-    }
-
-    final int? statusCode = (res as dynamic).statusCode as int?;
-    if (statusCode != 200) return false;
-
-    dynamic rawBody;
-    if ((res as dynamic).body != null) {
-      rawBody = (res as dynamic).body; // http
-    } else {
-      rawBody = (res as dynamic).data; // dio
-    }
-
-    final String bodyStr = rawBody is String ? rawBody : jsonEncode(rawBody);
-    final resp = Resp.fromBody(bodyStr);
-
-    if (!resp.ok) return false;
-    if (resp.body == null || resp.body is! Map<String, dynamic>) return false;
-
-    final detail = MaintenanceDetailItem.fromJson(
-      resp.body as Map<String, dynamic>,
-    );
-
-    return detail.status == expectedStatus;
-  } catch (e) {
-    return false;
   }
 }

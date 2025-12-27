@@ -79,7 +79,7 @@ class VendorPage extends ConsumerWidget {
 
               // ✅ 아이디 진정성 카드 (AdminAppPage 느낌 그대로)
               _sectionCard(
-                title: '업체 계정',
+                title: '아이디 진정성',
                 children: [
                   Row(
                     children: [
@@ -106,7 +106,7 @@ class VendorPage extends ConsumerWidget {
                 children: [
                   Expanded(
                     child: _SummaryCard(
-                      title: '견적 제출 필요\n ',
+                      title: '견적 제출 필요',
                       count: s.estimating,
                       onTap: () => _goList(context, 'ESTIMATING'),
                     ),
@@ -114,7 +114,19 @@ class VendorPage extends ConsumerWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: _SummaryCard(
-                      title: '작업 중\n(결과제출 필요)',
+                      title: '견적 반려',
+                      count: s.hq2Rejected,
+                      onTap: () => _goList(context, 'HQ2_REJECTED'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: _SummaryCard(
+                      title: '작업 중',
                       count: s.inProgress,
                       onTap: () => _goList(context, 'IN_PROGRESS'),
                     ),
@@ -122,14 +134,13 @@ class VendorPage extends ConsumerWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: _SummaryCard(
-                      title: '작업 완료\n ',
+                      title: '작업 완료',
                       count: s.completed,
                       onTap: () => _goList(context, 'COMPLETED'),
                     ),
                   ),
                 ],
               ),
-
               const SizedBox(height: 32),
 
               SizedBox(
@@ -211,9 +222,11 @@ class _SummaryCard extends StatelessWidget {
   Color _countColor() {
     switch (title) {
       case '견적 제출 필요':
+        return const Color(0xFF1565C0);
+      case '견적 반려':
         return Colors.orange;
-      case '작업 중(결과제출 필요)':
-        return Colors.blueAccent;
+      case '작업 중':
+        return const Color(0xFF1565C0);
       case '작업 완료':
         return Colors.green;
       default:
@@ -224,24 +237,30 @@ class _SummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 title,
-                style: const TextStyle(fontSize: 13, color: Colors.grey),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF424242),
+                  letterSpacing: 0.2,
+                ),
               ),
               const SizedBox(height: 8),
               Text(
                 '$count건',
                 style: TextStyle(
                   fontSize: 22,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w900,
                   color: _countColor(),
                 ),
               ),

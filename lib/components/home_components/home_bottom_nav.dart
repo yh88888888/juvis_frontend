@@ -25,6 +25,14 @@ class _HomeBottomNavState extends ConsumerState<HomeBottomNav> {
   Widget build(BuildContext context) {
     final count = ref.watch(unreadCountProvider);
 
+    // ✅ 세션 role 읽어서 홈 라우트 결정
+    final session = ref.watch(sessionProvider);
+    final roleStr = (session?.role?.toString() ?? '').toUpperCase();
+    final isVendor = roleStr.contains('VENDOR');
+
+    // ✅ vendor면 VendorPage로 (라우트명 프로젝트에 맞게!)
+    final String homeRoute = isVendor ? '/vendor' : '/home';
+
     return NavigationBar(
       selectedIndex: _selectedIndex,
       indicatorColor: Colors.transparent,
@@ -35,8 +43,8 @@ class _HomeBottomNavState extends ConsumerState<HomeBottomNav> {
         }
 
         if (index == 2) {
-          // 알림 진입할 때 최신 unread도 당겨오면 더 안정적
           await ref.read(notificationProvider.notifier).refreshUnreadCount();
+          if (!mounted) return;
           Navigator.pushNamed(context, '/notifications');
           setState(() => _selectedIndex = index);
           return;
@@ -49,14 +57,18 @@ class _HomeBottomNavState extends ConsumerState<HomeBottomNav> {
         }
 
         if (index == 0) {
-          Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+          // ✅ 핵심: 홈 버튼 목적지 분기
+          Navigator.pushNamedAndRemoveUntil(
+            context,
+            homeRoute,
+            (route) => false,
+          );
           setState(() => _selectedIndex = index);
           return;
         }
 
         setState(() => _selectedIndex = index);
       },
-      // ❗ const 제거 (중요)
       destinations: [
         const NavigationDestination(
           icon: Icon(Icons.home_outlined),

@@ -144,6 +144,11 @@ class _HqRequestListPageState extends ConsumerState<HqRequestListPage> {
                     onTap: () => _setStatus('APPROVAL_PENDING'),
                   ),
                   _chip(
+                    '견적반려',
+                    isOn: q.status == 'HQ2_REJECTED',
+                    onTap: () => _setStatus('HQ2_REJECTED'),
+                  ),
+                  _chip(
                     '작업중',
                     isOn: q.status == 'IN_PROGRESS',
                     onTap: () => _setStatus('IN_PROGRESS'),
@@ -304,6 +309,8 @@ class _HqRequestListPageState extends ConsumerState<HqRequestListPage> {
         return '업체 견적 대기';
       case 'APPROVAL_PENDING':
         return '견적 제출(승인 대기)';
+      case 'HQ2_REJECTED':
+        return '견적 반려';
       case 'IN_PROGRESS':
         return '작업 중';
       case 'COMPLETED':

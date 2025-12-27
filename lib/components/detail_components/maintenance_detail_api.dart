@@ -51,7 +51,7 @@ class MaintenanceDetailApi {
   }
 
   static Future<http.Response> fetchVendorDetail(int id) async {
-    final uri = Uri.parse('$apiBase/api/vendor/maintenances/$id');
+    final uri = Uri.parse('$apiBase/api/vendor/maintenance/requests/$id');
     return authRequest((accessToken) {
       return http.get(
         uri,
@@ -160,7 +160,7 @@ class MaintenanceDetailApi {
     DateTime? workEndDate,
   }) async {
     final uri = Uri.parse(
-      '$apiBase/api/vendor/maintenance/requests/$id/estimate',
+      '$apiBase/api/vendor/maintenance/requests/$id/submit-estimate',
     );
 
     String? fmtDate(DateTime? d) {

@@ -25,6 +25,7 @@ class AdminSummary {
   final int requested;
   final int estimating;
   final int approvalPending;
+  final int hq2Rejected;
   final int inProgress;
   final int completed;
 
@@ -32,19 +33,21 @@ class AdminSummary {
     required this.requested,
     required this.estimating,
     required this.approvalPending,
+    required this.hq2Rejected,
     required this.inProgress,
     required this.completed,
   });
 
   factory AdminSummary.fromJson(Map<String, dynamic> json) {
-    int _i(String k) => (json[k] as num?)?.toInt() ?? 0;
+    int _v(dynamic v) => (v as num?)?.toInt() ?? 0;
 
     return AdminSummary(
-      requested: _i('requested'),
-      estimating: _i('estimating'),
-      approvalPending: _i('approvalPending'),
-      inProgress: _i('inProgress'),
-      completed: _i('completed'),
+      requested: _v(json['requested']),
+      estimating: _v(json['estimating']),
+      approvalPending: _v(json['approvalPending'] ?? json['approval_pending']),
+      hq2Rejected: _v(json['hq2Rejected'] ?? json['hq2_rejected']),
+      inProgress: _v(json['inProgress'] ?? json['in_progress']),
+      completed: _v(json['completed']),
     );
   }
 

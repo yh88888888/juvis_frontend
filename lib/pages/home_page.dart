@@ -100,9 +100,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 18),
-
               // 🔹 빠른 액션
               const QuickActionsSection(),
             ],

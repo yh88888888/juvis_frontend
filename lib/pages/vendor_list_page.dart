@@ -119,6 +119,11 @@ class _VendorListPageState extends ConsumerState<VendorListPage> {
                     onTap: () => _setStatus('ESTIMATING'),
                   ),
                   _chip(
+                    '견적 반려',
+                    isOn: _status == 'HQ2_REJECTED',
+                    onTap: () => _setStatus('HQ2_REJECTED'),
+                  ),
+                  _chip(
                     '승인 대기',
                     isOn: _status == 'APPROVAL_PENDING',
                     onTap: () => _setStatus('APPROVAL_PENDING'),
@@ -275,12 +280,13 @@ class _RowCard extends StatelessWidget {
   bool get _isActionTarget {
     final s = status.trim().toUpperCase();
     // Vendor 입장에서 "내가 해야 할 액션" 강조
-    return s == 'ESTIMATING' || s == 'IN_PROGRESS';
+    return s == 'ESTIMATING' || s == 'HQ2_REJECTED' || s == 'IN_PROGRESS';
   }
 
   static Color _barColor(String status) {
     final s = status.trim().toUpperCase();
     if (s == 'ESTIMATING') return Colors.orange;
+    if (s == 'HQ2_REJECTED') return Colors.grey;
     if (s == 'IN_PROGRESS') return Colors.deepPurple;
     return Colors.transparent;
   }

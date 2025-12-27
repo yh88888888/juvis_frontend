@@ -145,6 +145,14 @@ class _AdminAppPageState extends ConsumerState<AdminAppPage> with RouteAware {
                         onTap: () => _goList('ESTIMATING'),
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _SummaryCard(
+                        title: '견적 제출',
+                        count: s.estimating,
+                        onTap: () => _goList('APPROVAL_PENDING'),
+                      ),
+                    ),
                   ],
                 ),
 
@@ -156,9 +164,9 @@ class _AdminAppPageState extends ConsumerState<AdminAppPage> with RouteAware {
                     const SizedBox(width: 8),
                     Expanded(
                       child: _SummaryCard(
-                        title: '견적 제출',
-                        count: s.approvalPending,
-                        onTap: () => _goList('APPROVAL_PENDING'),
+                        title: '견적 반려',
+                        count: s.hq2Rejected,
+                        onTap: () => _goList('HQ2_REJECTED'),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -187,6 +195,7 @@ class _AdminAppPageState extends ConsumerState<AdminAppPage> with RouteAware {
                   total:
                       s.requested +
                       s.estimating +
+                      s.hq2Rejected +
                       s.approvalPending +
                       s.inProgress +
                       s.completed,

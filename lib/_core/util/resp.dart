@@ -19,4 +19,11 @@ class Resp<T> {
     final body = decoded['body'];
     return Resp(status: status, msg: msg, body: body);
   }
+
+  static Resp<dynamic> fromJson(Map<String, dynamic> json) {
+    final status = (json['status'] as num?)?.toInt() ?? 500;
+    final msg = json['msg']?.toString();
+    final body = json['body'];
+    return Resp(status: status, msg: msg, body: body);
+  }
 }
